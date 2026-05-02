@@ -44,7 +44,7 @@ export function Chatbot() {
     setIsLoading(true);
 
     try {
-      const response = await apiRequest<{ reply: string, type?: string }>('/chat', {
+      const response = await apiRequest<{ reply: string, type?: string }>('/insights/chat', {
         method: 'POST',
         body: JSON.stringify({ message: userMessage, session_id: sessionId })
       });

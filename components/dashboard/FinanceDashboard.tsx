@@ -7,6 +7,8 @@ import {
   type ResourceRecord,
   type TransactionRecord,
 } from '@/lib/api';
+
+const fetcher = <T,>(url: string): Promise<T> => apiRequest<T>(url);
 import { BrandLogo } from '@/components/BrandLogo';
 import { FundingSourceModal, type FundingSourceFormValues } from './FundingSourceModal';
 import { TransactionModal, type TransactionFormValues } from './TransactionModal';
@@ -14,8 +16,6 @@ import { BudgetModal } from './BudgetModal';
 import { Chatbot } from './Chatbot';
 import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon } from '@/components/icons';
 import './dashboard.css';
-
-const fetcher = <T,>(url: string): Promise<T> => apiRequest<T>(url);
 
 const navigation = [
   { name: 'Dashboard', icon: <DashboardIcon /> },
@@ -155,7 +155,7 @@ export function FinanceDashboard() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [txFilterMonth, setTxFilterMonth] = useState(new Date().getMonth());
   const [txFilterYear, setTxFilterYear] = useState(new Date().getFullYear());
-  const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences'>('Profile');
+  const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences' | 'Account'>('Profile');
 
   const { data: prefData, mutate: mutatePreferences } = useSWR<any>('/users/preferences', (url: string) => apiRequest<any>(url).catch(() => null));
   const preferences = prefData || { hideBalance: false, dailyReminder: true, budgetLimitAlert: true, weeklySummary: true };
@@ -670,17 +670,17 @@ export function FinanceDashboard() {
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setProfileSaving(true);
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
     
-    const firstName = (formData.get('firstName') as string) || '';
-    const lastName = (formData.get('lastName') as string) || '';
-    const occupation = (formData.get('occupation') as string) || '';
-    const bio = (formData.get('bio') as string) || '';
+    const firstName = formData.get('firstName') as string;
+    const lastName = formData.get('lastName') as string;
+    const occupation = formData.get('occupation') as string;
+    const bio = formData.get('bio') as string;
 
-    setProfileSaving(true);
     try {
-      const updatedUser = await apiRequest<UserProfile>('/users/profile', {
+      await apiRequest('/users/profile', {
         method: 'PUT',
         body: JSON.stringify({
           name: `${firstName} ${lastName}`.trim(),
@@ -688,12 +688,29 @@ export function FinanceDashboard() {
           bio
         })
       });
-      setUserProfile(updatedUser);
-      setNotice('Profil berhasil diperbarui! ✨');
+      mutateProfile();
+      setNotice('Profile updated successfully');
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Gagal simpan profil.');
+      setError(err instanceof Error ? err.message : 'Failed to update profile');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async (password: string) => {
+    try {
+      await apiRequest('/users/account', {
+        method: 'DELETE',
+        body: JSON.stringify({ password })
+      });
+      
+      // Cleanup and redirect
+      if (typeof window !== 'undefined') {
+        window.localStorage.clear(); // Clear all data
+        window.location.assign('/');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menghapus akun. Pastikan password Anda benar.');
     }
   };
 
@@ -1589,6 +1606,12 @@ export function FinanceDashboard() {
             >
               Preferences
             </button>
+            <button 
+              onClick={() => setSettingsSubTab('Account')}
+              style={{ border: 'none', padding: '8px 24px', borderRadius: '8px', cursor: 'pointer', background: settingsSubTab === 'Account' ? '#f1c74a' : 'transparent', color: '#171717', fontWeight: 600, transition: '0.3s' }}
+            >
+              Account
+            </button>
           </div>
 
           <article className="panel" style={{ background: 'white', padding: '40px', borderRadius: '24px', border: '1px solid rgba(23, 23, 23, 0.06)', boxShadow: '0 14px 40px rgba(18, 17, 12, 0.06)' }}>
@@ -1743,6 +1766,52 @@ export function FinanceDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {settingsSubTab === 'Account' && (
+              <div className="account-settings">
+                <div style={{ marginBottom: '32px' }}>
+                  <h3 style={{ margin: '0 0 12px', fontSize: '1.2rem', fontWeight: 700 }}>Pengaturan Akun</h3>
+                  <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '24px' }}>Kelola keamanan dan ketersediaan akun Anda.</p>
+                  
+                  <div style={{ 
+                    padding: '24px', 
+                    borderRadius: '16px', 
+                    border: '1px solid #fee2e2', 
+                    background: '#fffafb' 
+                  }}>
+                    <h4 style={{ margin: '0 0 8px', color: '#991b1b', fontWeight: 700 }}>Danger Zone</h4>
+                    <p style={{ color: '#7f1d1d', fontSize: '0.85rem', marginBottom: '20px', lineHeight: 1.5 }}>
+                      Menghapus akun Anda akan menghapus semua data transaksi, budget, dan pengaturan secara permanen. 
+                      Tindakan ini tidak dapat dibatalkan.
+                    </p>
+                    
+                    <button 
+                      onClick={() => {
+                        const pass = window.prompt('Silakan masukkan password Anda untuk mengonfirmasi penghapusan akun:');
+                        if (pass) {
+                          handleDeleteAccount(pass);
+                        }
+                      }}
+                      style={{ 
+                        background: '#ef4444', 
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '12px 24px', 
+                        borderRadius: '10px', 
+                        fontWeight: 700, 
+                        cursor: 'pointer',
+                        transition: '0.3s',
+                        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.background = '#dc2626')}
+                      onMouseOut={(e) => (e.currentTarget.style.background = '#ef4444')}
+                    >
+                      Hapus Akun Permanen
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

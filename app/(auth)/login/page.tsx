@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiRequest, setStoredAuthTokens, type AuthTokens } from '@/lib/api';
 import type { AuthResponse } from '@/components/auth/types';
 import { OtpPanel } from '@/components/auth/OtpPanel';
@@ -91,6 +92,22 @@ export default function LoginPage() {
       </label>
 
       {authError ? <p className="modal-error">{authError}</p> : null}
+
+      <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '24px' }}>
+        <Link 
+          href="/forgot-password"
+          style={{ 
+            fontSize: '0.88rem', 
+            color: '#d97706', 
+            fontWeight: 700,
+            textDecoration: 'none',
+            display: 'inline-block',
+            padding: '4px 0'
+          }}
+        >
+          Lupa password?
+        </Link>
+      </div>
 
       <div className="form-actions">
         <button type="button" className="text-button" onClick={() => router.push('/')}>
