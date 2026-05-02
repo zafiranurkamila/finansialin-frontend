@@ -219,6 +219,7 @@ export function TransactionModal({
             <label className="field modal-field">
               <span>Type</span>
               <select
+                className="premium-select"
                 value={values.type}
                 onChange={(event) => setValues((current) => ({ ...current, type: event.target.value as 'income' | 'expense' }))}
               >
@@ -229,7 +230,7 @@ export function TransactionModal({
 
             <label className="field modal-field">
               <span>Source dompet</span>
-              <select value={values.source} onChange={(event) => setValues((current) => ({ ...current, source: event.target.value }))}>
+              <select className="premium-select" value={values.source} onChange={(event) => setValues((current) => ({ ...current, source: event.target.value }))}>
                 <option value="">Pilih dompet</option>
                 {sourceOptions.map((source) => (
                   <option key={source} value={source}>
@@ -242,6 +243,7 @@ export function TransactionModal({
             <label className="field modal-field">
               <span>Category</span>
               <select 
+                className="premium-select"
                 value={values.idCategory || ''} 
                 onChange={(event) => {
                   const val = event.target.value;

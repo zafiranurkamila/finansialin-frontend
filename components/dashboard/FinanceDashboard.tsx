@@ -34,12 +34,14 @@ const initialTransactionValues = (): TransactionFormValues => ({
   date: new Date().toISOString().slice(0, 10),
 });
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number | string) {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  // Use Math.round to avoid 99.999... issues
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(Math.round(num));
 }
 
 function formatDate(value?: string) {
@@ -210,8 +212,13 @@ export function FinanceDashboard() {
   const { data: budgetsData, mutate: mutateBudgets } = useSWR<BudgetRecord[]>('/budgets', (url: string) => apiRequest<BudgetRecord[]>(url).catch(() => []));
   const budgets = budgetsData || [];
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [budgetMode, setBudgetMode] = useState<'create' | 'edit'>('create');
+  const [selectedBudget, setSelectedBudget] = useState<any>(null);
   const [budgetSaving, setBudgetSaving] = useState(false);
   const [budgetError, setBudgetError] = useState('');
+  const [budgetSearch, setBudgetSearch] = useState('');
+  const [budgetFilterPeriod, setBudgetFilterPeriod] = useState('all');
+  const [budgetFilterStatus, setBudgetFilterStatus] = useState<'all' | 'safe' | 'over'>('all');
 
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletMode, setWalletMode] = useState<'create' | 'edit'>('create');
@@ -347,10 +354,20 @@ export function FinanceDashboard() {
   }, [transactions, txFilterMonth, txFilterYear, globalSearch]);
 
   const filteredBudgets = useMemo(() => {
-    return budgets.filter(b => 
-      (b.category?.name || '').toLowerCase().includes(globalSearch.toLowerCase())
-    );
-  }, [budgets, globalSearch]);
+    return budgets.filter(b => {
+      // Prioritize budget-specific search if active, otherwise use globalSearch
+      const search = budgetSearch || globalSearch;
+      const matchesSearch = (b.category?.name || '').toLowerCase().includes(search.toLowerCase());
+      const matchesPeriod = budgetFilterPeriod === 'all' || b.period === budgetFilterPeriod;
+      
+      let matchesStatus = true;
+      const isOver = (b.percent || 0) >= 100;
+      if (budgetFilterStatus === 'safe') matchesStatus = !isOver;
+      if (budgetFilterStatus === 'over') matchesStatus = isOver;
+
+      return matchesSearch && matchesPeriod && matchesStatus;
+    });
+  }, [budgets, budgetSearch, globalSearch, budgetFilterPeriod, budgetFilterStatus]);
 
   const topTransactions = useMemo(() => {
     return transactions
@@ -625,10 +642,19 @@ export function FinanceDashboard() {
     setBudgetSaving(true);
     setBudgetError('');
     try {
-      await apiRequest('/budgets', {
-        method: 'POST',
-        body: JSON.stringify(values),
-      });
+      if (budgetMode === 'edit' && selectedBudget) {
+        await apiRequest(`/budgets/${selectedBudget.idBudget}`, {
+          method: 'PATCH',
+          body: JSON.stringify(values),
+        });
+        setNotice('Budget berhasil diperbarui.');
+      } else {
+        await apiRequest('/budgets', {
+          method: 'POST',
+          body: JSON.stringify(values),
+        });
+        setNotice('Budget baru berhasil dibuat.');
+      }
       await loadDashboard();
       setBudgetModalOpen(false);
     } catch (err) {
@@ -636,6 +662,39 @@ export function FinanceDashboard() {
     } finally {
       setBudgetSaving(false);
     }
+  };
+
+  const openCreateBudget = () => {
+    setBudgetMode('create');
+    setSelectedBudget(null);
+    setBudgetModalOpen(true);
+  };
+
+  const openEditBudget = (budget: any) => {
+    setBudgetMode('edit');
+    setSelectedBudget(budget);
+    setBudgetModalOpen(true);
+  };
+
+  const handleBudgetDelete = (id: number) => {
+    setConfirmModal({
+      open: true,
+      title: 'Hapus Budget?',
+      message: 'Apakah Anda yakin ingin menghapus budget ini? Tindakan ini tidak dapat dibatalkan.',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await apiRequest(`/budgets/${id}`, { method: 'DELETE' });
+          setNotice('Budget telah dihapus.');
+          await loadDashboard();
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Gagal menghapus budget.');
+        } finally {
+          setConfirmModal(prev => ({ ...prev, open: false }));
+        }
+      },
+      confirmText: 'Hapus'
+    });
   };
 
   const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -782,69 +841,28 @@ export function FinanceDashboard() {
               <p className="dashboard-greeting">Hi <span>{userProfile?.name?.split(' ')[0] || 'User'}</span> ,</p>
               <h1>Welcome back!</h1>
             </div>
+          ) : activeTab === 'Budgeting' ? (
+            <div style={{ flex: 1 }}>
+              <h1 style={{ margin: '0 0 2px 0' }}>My Budgets</h1>
+              <p style={{ color: '#666', margin: 0, fontWeight: 400 }}>Manage your spending limits by category.</p>
+            </div>
           ) : (
             <div>
               <h1>{activeTab}</h1>
             </div>
           )}
 
-          <div className="topbar-tools" style={{ position: 'relative' }}>
-            <label className="searchbar">
-              <span className="search-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              </span>
-              <input 
-                type="search" 
-                placeholder={`Search in ${activeTab}...`} 
-                aria-label="Search" 
-                value={globalSearch}
-                onFocus={() => setShowSearchResults(true)}
-                onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
-                onChange={(e) => {
-                  setGlobalSearch(e.target.value);
-                  setShowSearchResults(true);
-                }}
-              />
-
-              {showSearchResults && quickSearchResults && (
-                <div className="search-results-dropdown">
-                  {quickSearchResults.transactions.length > 0 && (
-                    <div className="search-res-section">
-                      <p className="res-section-title">Transactions</p>
-                      {quickSearchResults.transactions.map(tx => (
-                        <div key={tx.idTransaction} className="search-res-item" onClick={() => { setActiveTab('Transactions'); setGlobalSearch(tx.description || ''); }}>
-                          <div className={`res-icon ${tx.type}`}>
-                            {tx.type === 'income' ? '↙' : '↗'}
-                          </div>
-                          <div className="res-info">
-                            <span className="res-name">{tx.description || tx.source}</span>
-                            <span className="res-meta">{formatDate(tx.date)} • {formatCurrency(tx.amount)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {quickSearchResults.budgets.length > 0 && (
-                    <div className="search-res-section">
-                      <p className="res-section-title">Budgets</p>
-                      {quickSearchResults.budgets.map(b => (
-                        <div key={b.idBudget} className="search-res-item" onClick={() => setActiveTab('Budgeting')}>
-                          <div className="res-icon budget">B</div>
-                          <div className="res-info">
-                            <span className="res-name">{b.category?.name}</span>
-                            <span className="res-meta">Target: {formatCurrency(b.amount)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </label>
-            <button type="button" className="add-wallet-btn" onClick={openCreateWallet}>
-              + Wallet
-            </button>
+          <div className="topbar-tools" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {activeTab === 'Dashboard' && (
+              <button type="button" className="add-wallet-btn" onClick={openCreateWallet}>
+                + Wallet
+              </button>
+            )}
+            {activeTab === 'Budgeting' && (
+              <button type="button" className="add-wallet-btn" onClick={openCreateBudget}>
+                + Create Budget
+              </button>
+            )}
             <button type="button" className="icon-circle notification-btn" aria-label="Notifications" onClick={toggleNotifications}>
               <BellIcon />
               {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
@@ -918,15 +936,44 @@ export function FinanceDashboard() {
                   <div className="account-head">
                     <p className="account-title">{source.source}</p>
                     <div className="account-bank-logo">
-                      {source.source.toLowerCase().includes('mbanking') || source.source.toLowerCase().includes('bri') ? (
-                        <div style={{ background: '#0f52ba', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>BRI</div>
-                      ) : source.source.toLowerCase().includes('emoney') || source.source.toLowerCase().includes('jago') ? (
-                        <div style={{ color: '#f3a847', fontSize: '16px', fontWeight: 'bold' }}>Jago</div>
-                      ) : (
-                        <div style={{ background: '#f1c74a', padding: '4px 8px', borderRadius: '4px' }}>
-                          <svg width="20" height="14" viewBox="0 0 24 16" fill="none" stroke="#000" strokeWidth="2"><rect x="1" y="1" width="22" height="14" rx="2"/><circle cx="12" cy="8" r="3"/><line x1="1" y1="8" x2="4" y2="8"/><line x1="20" y1="8" x2="23" y2="8"/></svg>
-                        </div>
-                      )}
+                      {(() => {
+                        const name = source.source.toLowerCase();
+                        
+                        // Bank Specific Chips
+                        if (name.includes('bri')) {
+                          return <div style={{ background: '#0f52ba', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>BRI</div>;
+                        }
+                        if (name.includes('bca')) {
+                          return <div style={{ background: '#0060ad', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>BCA</div>;
+                        }
+                        if (name.includes('mandiri')) {
+                          return <div style={{ background: '#003d79', color: '#fdb813', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>Mandiri</div>;
+                        }
+                        
+                        // Digital / Cards Specific Text
+                        if (name.includes('jago')) {
+                          return <div style={{ color: '#f3a847', fontSize: '16px', fontWeight: 'bold' }}>Jago</div>;
+                        }
+                        if (name.includes('flazz')) {
+                          return <div style={{ color: '#0060ad', fontSize: '16px', fontWeight: 'bold' }}>Flazz</div>;
+                        }
+
+                        // Digital Wallets / Generic E-Money
+                        if (name.includes('emoney') || name.includes('e money') || name.includes('gopay') || name.includes('ovo') || name.includes('dana') || name.includes('shopee')) {
+                          return (
+                            <div style={{ background: '#f1c74a', padding: '4px 8px', borderRadius: '4px' }}>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                            </div>
+                          );
+                        }
+                        
+                        // Default Cash / Physical Money
+                        return (
+                          <div style={{ background: '#f1c74a', padding: '4px 8px', borderRadius: '4px' }}>
+                            <svg width="20" height="14" viewBox="0 0 24 16" fill="none" stroke="#000" strokeWidth="2"><rect x="1" y="1" width="22" height="14" rx="2"/><circle cx="12" cy="8" r="3"/><line x1="1" y1="8" x2="4" y2="8"/><line x1="20" y1="8" x2="23" y2="8"/></svg>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -1167,7 +1214,15 @@ export function FinanceDashboard() {
           <section className="transactions-table-panel">
             <div className="table-toolbar">
               <div className="toolbar-left">
-                {/* Search is now global in topbar */}
+                <div className="table-search" style={{ width: '300px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a0a0a0" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input 
+                    type="text" 
+                    placeholder="Search transaction..." 
+                    value={globalSearch}
+                    onChange={(e) => setGlobalSearch(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="toolbar-right">
                 <select 
@@ -1255,15 +1310,90 @@ export function FinanceDashboard() {
       )}
 
         {activeTab === 'Budgeting' && (
-          <section className="budgeting-view" style={{ padding: '20px 0' }}>
-            <div className="view-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <div>
-                <h1 style={{ fontSize: '1.8rem', fontWeight: 700 }}>My Budgets</h1>
-                <p style={{ color: '#666' }}>Manage your spending limits by category.</p>
-              </div>
-              <button className="add-goals-button" onClick={() => setBudgetModalOpen(true)}>
-                + Create Budget
-              </button>
+          <section className="budgeting-view" style={{ padding: '0' }}>
+            <div style={{ height: '8px' }} />
+
+            <div className="budget-filters" style={{ 
+              display: 'flex', 
+              gap: '16px', 
+              marginBottom: '32px', 
+              flexWrap: 'wrap', 
+              alignItems: 'center',
+              background: 'rgba(255,255,255,0.4)',
+              padding: '12px',
+              borderRadius: '20px',
+              border: '1px solid var(--premium-border)'
+            }}>
+               <div className="table-search" style={{ 
+                 flex: 1, 
+                 minWidth: '240px',
+                 background: 'white',
+                 borderRadius: '14px',
+                 border: '2px solid #f0f0f0',
+                 height: '48px',
+                 boxShadow: 'none'
+               }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#a0a0a0' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input 
+                    type="text" 
+                    placeholder="Search category..." 
+                    value={budgetSearch}
+                    onChange={(e) => setBudgetSearch(e.target.value)}
+                    style={{ fontSize: '0.95rem' }}
+                  />
+               </div>
+               
+               <select 
+                 className="premium-select" 
+                 style={{ 
+                   width: 'auto', 
+                   minWidth: '180px'
+                 }}
+                 value={budgetFilterPeriod}
+                 onChange={(e) => setBudgetFilterPeriod(e.target.value)}
+               >
+                 <option value="all">All Periods</option>
+                 <option value="daily">Daily</option>
+                 <option value="weekly">Weekly</option>
+                 <option value="monthly">Monthly</option>
+                 <option value="yearly">Yearly</option>
+                 <option value="custom">Custom Range</option>
+               </select>
+
+               <div className="status-toggle-group" style={{ 
+                 display: 'flex', 
+                 background: '#f0f0f0', 
+                 padding: '4px', 
+                 borderRadius: '14px',
+                 height: '48px',
+                 alignItems: 'center'
+               }}>
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'safe', label: 'On Track' },
+                    { id: 'over', label: 'Over Budget' }
+                  ].map(status => (
+                    <button
+                      key={status.id}
+                      type="button"
+                      onClick={() => setBudgetFilterStatus(status.id as any)}
+                      style={{
+                        padding: '0 20px',
+                        height: '40px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        fontSize: '0.9rem',
+                        fontWeight: 700,
+                        background: budgetFilterStatus === status.id ? 'white' : 'transparent',
+                        color: budgetFilterStatus === status.id ? '#171717' : '#8c8c8c',
+                        boxShadow: budgetFilterStatus === status.id ? '0 4px 12px rgba(0,0,0,0.06)' : 'none',
+                        transition: '0.2s'
+                      }}
+                    >
+                      {status.label}
+                    </button>
+                  ))}
+               </div>
             </div>
 
             <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
@@ -1274,7 +1404,17 @@ export function FinanceDashboard() {
                   <article key={budget.idBudget} className="panel budget-card" style={{ padding: '24px', position: 'relative' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                       <h3 style={{ fontWeight: 600 }}>{budget.category?.name || 'General'}</h3>
-                      <span style={{ fontSize: '0.8rem', color: '#888', textTransform: 'capitalize' }}>{budget.period}</span>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#888', textTransform: 'capitalize' }}>{budget.period}</span>
+                        <div className="action-buttons" style={{ marginLeft: '8px' }}>
+                          <button type="button" className="action-btn" onClick={() => openEditBudget(budget)} title="Edit Budget">
+                            <PencilIcon />
+                          </button>
+                          <button type="button" className="action-btn" onClick={() => handleBudgetDelete(budget.idBudget)} title="Delete Budget">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     
                     <div style={{ marginBottom: '12px' }}>
@@ -1307,11 +1447,46 @@ export function FinanceDashboard() {
                 );
               })}
 
-              {budgets.length === 0 && (
-                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: '#a0a0a0' }}>
-                  <p>No budgets set yet. Start by creating one for your categories!</p>
-                </div>
-              )}
+            {filteredBudgets.length === 0 && (
+              <div style={{ 
+                gridColumn: '1 / -1', 
+                textAlign: 'center', 
+                padding: '80px 40px', 
+                background: 'white', 
+                borderRadius: '32px', 
+                boxShadow: 'var(--premium-card-shadow)',
+                border: '1px solid var(--premium-border)'
+              }}>
+                 <div style={{ 
+                   width: '80px', 
+                   height: '80px', 
+                   background: '#fcfbf7', 
+                   borderRadius: '24px', 
+                   display: 'flex', 
+                   alignItems: 'center', 
+                   justifyContent: 'center', 
+                   margin: '0 auto 24px',
+                   color: '#f1c74a'
+                 }}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+                 </div>
+                 <h3 style={{ fontWeight: 800, fontSize: '1.5rem', margin: '0 0 12px', color: '#171717' }}>Budget tidak ditemukan</h3>
+                 <p style={{ color: '#666', fontSize: '1rem', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>
+                   {budgetSearch || budgetFilterPeriod !== 'all' || budgetFilterStatus !== 'all' 
+                     ? 'Sepertinya tidak ada budget yang sesuai dengan filter Anda. Coba atur ulang pencarian atau filter.' 
+                     : 'Mulai atur pengeluaran Anda agar lebih terpantau dengan membuat budget pertama Anda sekarang.'}
+                 </p>
+                 {!budgetSearch && budgetFilterPeriod === 'all' && budgetFilterStatus === 'all' && (
+                    <button 
+                      className="solid-button" 
+                      onClick={() => openCreateBudget()}
+                      style={{ marginTop: '32px', padding: '12px 32px' }}
+                    >
+                      + Buat Budget Pertama
+                    </button>
+                 )}
+              </div>
+            )}
             </div>
           </section>
         )}
@@ -1482,18 +1657,20 @@ export function FinanceDashboard() {
                           <h3 style={{ fontWeight: 700, margin: 0 }}>Laporan Bulanan</h3>
                           <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
                              <select 
+                               className="premium-select"
                                value={reportMonth} 
                                onChange={(e) => setReportMonth(Number(e.target.value))}
-                               style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', background: 'white' }}
+                               style={{ width: '160px' }}
                              >
                                 {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((m, i) => (
                                    <option key={i} value={i}>{m}</option>
                                 ))}
                              </select>
                              <select 
+                               className="premium-select"
                                value={reportYear} 
                                onChange={(e) => setReportYear(Number(e.target.value))}
-                               style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', background: 'white' }}
+                               style={{ padding: '8px 12px', borderRadius: '12px', border: '1px solid #ddd', background: 'white' }}
                              >
                                 {[2024, 2025, 2026].map(y => (
                                    <option key={y} value={y}>{y}</option>
@@ -1854,6 +2031,14 @@ export function FinanceDashboard() {
 
       <BudgetModal
         open={budgetModalOpen}
+        mode={budgetMode}
+        initialValues={selectedBudget ? {
+          idCategory: selectedBudget.idCategory?.toString() || '',
+          amount: selectedBudget.amount?.toString() || '',
+          period: selectedBudget.period || 'monthly',
+          periodStart: selectedBudget.periodStart?.split('T')[0] || '',
+          periodEnd: selectedBudget.periodEnd?.split('T')[0] || '',
+        } : undefined}
         categories={categories.filter(c => c.type === 'expense')}
         loading={budgetSaving}
         error={budgetError}
