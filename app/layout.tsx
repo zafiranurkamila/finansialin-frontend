@@ -14,7 +14,7 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: 'Finansialin',
-  description: 'Frontend onboarding Finansialin dengan login, register, dan OTP.',
+  description: 'Frontend autentikasi Finansialin dengan login, register, dan OTP.',
 };
 
 export default function RootLayout({

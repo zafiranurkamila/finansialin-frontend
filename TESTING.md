@@ -18,10 +18,10 @@
 - `POST /api/auth/login` - Login user
 - `POST /api/auth/register` - Register user
 - `POST /api/auth/2fa/verify-login` - OTP verification
-- `GET /api/funding-sources` - List dompet
-- `POST /api/funding-sources` - Tambah dompet
-- `PUT /api/funding-sources/{id}` - Edit dompet
-- `DELETE /api/funding-sources/{id}` - Hapus dompet
+- `GET /api/resources` - List dompet
+- `POST /api/resources` - Tambah dompet
+- `PUT /api/resources/{id}` - Edit dompet
+- `DELETE /api/resources/{id}` - Hapus dompet
 - `POST /api/transactions` - Tambah transaksi
 - `GET /api/transactions?per_page=50` - List transaksi
 

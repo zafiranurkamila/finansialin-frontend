@@ -3,21 +3,18 @@ export type AuthTokens = {
   refreshToken?: string;
 };
 
-export type FundingSourceRecord = {
-  idFundingSource: number;
+export type ResourceRecord = {
+  id: number;
+  idResource: number;
   idUser: number;
-  name: string;
-  initialBalance: number;
-  availableBalance: number;
-  createdAt?: string;
-  updatedAt?: string;
+  source: string;
+  balance: number;
 };
 
 export type TransactionRecord = {
   idTransaction?: number;
   idUser?: number;
   idCategory?: number | null;
-  idFundingSource?: number | null;
   idResource?: number | null;
   type: 'income' | 'expense';
   amount: number;

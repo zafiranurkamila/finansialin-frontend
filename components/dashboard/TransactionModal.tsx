@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { apiRequest, type FundingSourceRecord } from '@/lib/api';
+import { apiRequest, type ResourceRecord } from '@/lib/api';
 
 export type TransactionFormValues = {
   type: 'income' | 'expense';
@@ -9,7 +9,8 @@ export type TransactionFormValues = {
   description: string;
   source: string;
   date: string;
-  idCategory?: number | string;
+  idCategory?: number | string | null;
+  idResource?: number | string | null;
 };
 
 export type CategoryRecord = {
@@ -21,7 +22,7 @@ export type CategoryRecord = {
 type Props = {
   open: boolean;
   mode: 'create' | 'edit';
-  sources: FundingSourceRecord[];
+  sources: ResourceRecord[];
   initialValues: TransactionFormValues;
   loading?: boolean;
   error?: string;
@@ -62,7 +63,7 @@ export function TransactionModal({
     }
   }, [initialValues, open, mode]);
 
-  const sourceOptions = useMemo(() => sources.map((source) => source.name), [sources]);
+  const sourceOptions = useMemo(() => sources.map((source) => source.source), [sources]);
   const filteredCategories = useMemo(() => categories.filter(c => c.type === values.type), [categories, values.type]);
 
   if (!open) {

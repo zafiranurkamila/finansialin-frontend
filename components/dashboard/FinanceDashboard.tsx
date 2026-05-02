@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import {
   apiRequest,
-  type FundingSourceRecord,
+  type ResourceRecord,
   type TransactionRecord,
 } from '@/lib/api';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -13,6 +14,8 @@ import { BudgetModal } from './BudgetModal';
 import { Chatbot } from './Chatbot';
 import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon } from '@/components/icons';
 import './dashboard.css';
+
+const fetcher = <T,>(url: string): Promise<T> => apiRequest<T>(url);
 
 const navigation = [
   { name: 'Dashboard', icon: <DashboardIcon /> },
@@ -106,18 +109,23 @@ function chartPath(points: number[]) {
 }
 
 export function FinanceDashboard() {
-  const [sources, setSources] = useState<FundingSourceRecord[]>([]);
-  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  const { data: sourcesResp, mutate: mutateSources } = useSWR<{ data: ResourceRecord[] }>('/resources', fetcher);
+  const sources = sourcesResp?.data || [];
+
+  const { data: txResp, mutate: mutateTransactions } = useSWR<{ data?: TransactionRecord[] }>('/transactions?per_page=50', fetcher);
+  const transactions = txResp?.data || [];
 
   type UserProfile = {
     idUser?: number;
     name?: string;
     email?: string;
   };
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const { data: profileResp, mutate: mutateProfile } = useSWR<{ data?: UserProfile } | UserProfile | null>('/auth/profile', (url: string) => apiRequest<{ data?: UserProfile } | UserProfile>(url).catch(() => null));
+  const userProfile = profileResp ? ('data' in profileResp && profileResp.data ? profileResp.data : (profileResp as UserProfile)) : null;
+  const setUserProfile = (profile: UserProfile | null) => mutateProfile(profile as any, { revalidate: false });
 
   type NotificationRecord = {
     idNotification: number;
@@ -128,14 +136,19 @@ export function FinanceDashboard() {
     createdAt: string;
   };
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { data: unreadResp, mutate: mutateUnread } = useSWR<{ count: number }>('/notifications/unread/count', (url: string) => apiRequest<{ count: number }>(url).catch(() => ({ count: 0 })));
+  const unreadCount = unreadResp?.count || 0;
+  const setUnreadCount = (count: number) => mutateUnread({ count }, { revalidate: false });
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [statsSubTab, setStatsSubTab] = useState<'Analytics' | 'Laporan'>('Analytics');
   const [reportMonth, setReportMonth] = useState(new Date().getMonth());
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
-  const [aiInsight, setAiInsight] = useState<string>('');
-  const [loadingAi, setLoadingAi] = useState(false);
+  
+  const { data: insightResp, mutate: mutateAiInsight, isValidating: loadingAi } = useSWR<{ summary: string }>('/insights/dashboard-summary', (url: string) => apiRequest<{ summary: string }>(url).catch(() => ({ summary: 'Belum ada insight AI saat ini. Terus catat transaksimu ya!' })));
+  const aiInsight = insightResp?.summary || 'Belum ada insight AI saat ini. Terus catat transaksimu ya!';
+
   const [ocrLoading, setOcrLoading] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -143,17 +156,10 @@ export function FinanceDashboard() {
   const [txFilterMonth, setTxFilterMonth] = useState(new Date().getMonth());
   const [txFilterYear, setTxFilterYear] = useState(new Date().getFullYear());
   const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences'>('Profile');
-  const [preferences, setPreferences] = useState<{
-    hideBalance: boolean;
-    dailyReminder: boolean;
-    budgetLimitAlert: boolean;
-    weeklySummary: boolean;
-  }>({
-    hideBalance: false,
-    dailyReminder: true,
-    budgetLimitAlert: true,
-    weeklySummary: true,
-  });
+
+  const { data: prefData, mutate: mutatePreferences } = useSWR<any>('/users/preferences', (url: string) => apiRequest<any>(url).catch(() => null));
+  const preferences = prefData || { hideBalance: false, dailyReminder: true, budgetLimitAlert: true, weeklySummary: true };
+  const setPreferences = (prefs: any) => mutatePreferences(prefs, { revalidate: false });
 
   const getCategoryIcon = (name: string) => {
     const lower = name.toLowerCase();
@@ -169,7 +175,8 @@ export function FinanceDashboard() {
     name: string;
     type: string;
   };
-  const [categories, setCategories] = useState<CategoryRecord[]>([]);
+  const { data: categoriesData } = useSWR<CategoryRecord[]>('/categories', (url: string) => apiRequest<CategoryRecord[]>(url).catch(() => []));
+  const categories = categoriesData || [];
 
   type GoalRecord = {
     idCategory: number | null;
@@ -180,7 +187,8 @@ export function FinanceDashboard() {
     remaining: number;
     overBudget: boolean;
   };
-  const [goals, setGoals] = useState<GoalRecord[]>([]);
+  const { data: goalsResp, mutate: mutateGoals } = useSWR<{ data: GoalRecord[] }>('/budgets/goals', (url: string) => apiRequest<{ data: GoalRecord[] }>(url).catch(() => ({ data: [] })));
+  const goals = goalsResp?.data || [];
 
   const [activeTab, setActiveTab] = useState('Dashboard');
 
@@ -195,7 +203,8 @@ export function FinanceDashboard() {
     periodEnd: string;
     category?: { name: string };
   };
-  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
+  const { data: budgetsData, mutate: mutateBudgets } = useSWR<BudgetRecord[]>('/budgets', (url: string) => apiRequest<BudgetRecord[]>(url).catch(() => []));
+  const budgets = budgetsData || [];
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [budgetSaving, setBudgetSaving] = useState(false);
   const [budgetError, setBudgetError] = useState('');
@@ -232,54 +241,18 @@ export function FinanceDashboard() {
   });
 
   const loadDashboard = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const [sourceData, transactionData, profileData, unreadData, goalsData, budgetsData, categoriesData, prefData] = await Promise.all([
-        apiRequest<FundingSourceRecord[]>('/funding-sources'),
-        apiRequest<{ data?: TransactionRecord[] }>('/transactions?per_page=50'),
-        apiRequest<{ data?: UserProfile } | UserProfile>('/auth/profile').catch(() => null),
-        apiRequest<{ count: number }>('/notifications/unread/count').catch(() => ({ count: 0 })),
-        apiRequest<{ data: GoalRecord[] }>('/budgets/goals').catch(() => ({ data: [] })),
-        apiRequest<BudgetRecord[]>('/budgets'),
-        apiRequest<CategoryRecord[]>('/categories').catch(() => []),
-        apiRequest<any>('/users/preferences').catch(() => null),
-      ]);
-
-      setSources(sourceData);
-      setTransactions(transactionData.data ?? []);
-      setUnreadCount(unreadData?.count ?? 0);
-      setGoals(goalsData.data || []);
-      setBudgets(budgetsData || []);
-      setCategories(categoriesData || []);
-      if (prefData) setPreferences(prefData);
-      
-      if (profileData) {
-        setUserProfile('data' in profileData && profileData.data ? profileData.data : (profileData as UserProfile));
-      }
-
-      setLoading(false);
-
-      // Fetch AI Insight in background
-      setLoadingAi(true);
-      try {
-        const insightData = await apiRequest<{ summary: string }>('/insights/dashboard-summary');
-        setAiInsight(insightData.summary || 'Kumpulkan lebih banyak data agar AI bisa memberikan insight untukmu! ✨');
-      } catch (e) {
-        setAiInsight('Belum ada insight AI saat ini. Terus catat transaksimu ya!');
-      } finally {
-        setLoadingAi(false);
-      }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Gagal memuat dashboard.');
-      setLoading(false);
-    }
+    await Promise.all([
+      mutateSources(),
+      mutateTransactions(),
+      mutateGoals(),
+      mutateBudgets(),
+      mutateAiInsight()
+    ]);
   };
 
-  useEffect(() => {
-    void loadDashboard();
+  const loading = !sourcesResp || !txResp;
 
+  useEffect(() => {
     const handleUnauthorized = () => {
       window.location.assign('/');
     };
@@ -323,21 +296,21 @@ export function FinanceDashboard() {
   const fixedWalletNames = ['MBanking', 'Emoney', 'Cash'];
   const displaySources = useMemo(() => {
     const fixed = fixedWalletNames.map(name => {
-      const existing = sources.find(s => s.name.toLowerCase() === name.toLowerCase());
+      const existing = sources.find(s => s.source.toLowerCase() === name.toLowerCase());
       if (existing) return existing;
-      return { idFundingSource: Math.floor(Math.random() * -10000), idUser: 0, name, initialBalance: 0, availableBalance: 0, isDummy: true } as FundingSourceRecord & { isDummy?: boolean };
+      return { id: Math.floor(Math.random() * -10000), idResource: Math.floor(Math.random() * -10000), idUser: 0, source: name, balance: 0, isDummy: true } as ResourceRecord & { isDummy?: boolean };
     });
-    const others = sources.filter(s => !fixedWalletNames.some(name => s.name.toLowerCase() === name.toLowerCase()));
+    const others = sources.filter(s => !fixedWalletNames.some(name => s.source.toLowerCase() === name.toLowerCase()));
     return [...fixed, ...others];
   }, [sources]);
 
   const totalAvailable = useMemo(
-    () => sources.reduce((sum, source) => sum + Number(source.availableBalance || 0), 0),
+    () => sources.reduce((sum, source) => sum + Number(source.balance || 0), 0),
     [sources],
   );
 
   const totalInitialBalance = useMemo(
-    () => sources.reduce((sum, source) => sum + Number(source.initialBalance || 0), 0),
+    () => sources.reduce((sum, source) => sum + Number(source.balance || 0), 0),
     [sources],
   );
 
@@ -399,13 +372,13 @@ export function FinanceDashboard() {
 
     return items.length > 0
       ? items
-      : [
+      : ([
           ['Rumah', 42],
           ['Makan', 25],
           ['Investasi', 16],
           ['Belanja', 10],
           ['Kecantikan', 7],
-        ];
+        ] as [string, number][]);
   }, [filteredTransactions]);
 
   const totalIncome = useMemo(() => transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0), [transactions]);
@@ -472,28 +445,28 @@ export function FinanceDashboard() {
     setWalletModalOpen(true);
   };
 
-  const openEditWallet = (source: FundingSourceRecord) => {
+  const openEditWallet = (source: ResourceRecord) => {
     if ((source as any).isDummy) {
       setWalletMode('create');
       setEditingWalletId(null);
     } else {
       setWalletMode('edit');
-      setEditingWalletId(source.idFundingSource);
+      setEditingWalletId(source.idResource);
     }
     setWalletInitialValues({
-      name: source.name,
-      initialBalance: String(source.initialBalance),
+      name: source.source,
+      initialBalance: String(source.balance),
     });
     setWalletError('');
     setWalletModalOpen(true);
   };
 
-  const openTopUpTransaction = (source?: FundingSourceRecord) => {
+  const openTopUpTransaction = (source?: ResourceRecord) => {
     setTransactionInitialValues({
       type: 'income',
       amount: '',
-      description: source ? `Top up ${source.name}` : 'Top up dompet',
-      source: source?.name ?? '',
+      description: source ? `Top up ${source.source}` : 'Top up dompet',
+      source: source?.source ?? '',
       date: new Date().toISOString().slice(0, 10),
     });
     setTransactionMode('create');
@@ -510,7 +483,7 @@ export function FinanceDashboard() {
       source: tx.source || '',
       date: tx.date || new Date().toISOString().slice(0, 10),
       idCategory: tx.idCategory,
-      idFundingSource: tx.idFundingSource
+      idResource: tx.idResource
     });
     setTransactionMode('edit');
     setEditingTransactionId(tx.idTransaction || null);
@@ -550,13 +523,13 @@ export function FinanceDashboard() {
       };
 
       if (walletMode === 'edit' && editingWalletId !== null) {
-        await apiRequest(`/funding-sources/${editingWalletId}`, {
+        await apiRequest(`/resources/${editingWalletId}`, {
           method: 'PUT',
           body: JSON.stringify(body),
         });
         setNotice('Dompet berhasil diperbarui.');
       } else {
-        await apiRequest('/funding-sources', {
+        await apiRequest('/resources', {
           method: 'POST',
           body: JSON.stringify(body),
         });
@@ -572,18 +545,18 @@ export function FinanceDashboard() {
     }
   };
 
-  const handleRemoveWallet = async (source: FundingSourceRecord) => {
+  const handleRemoveWallet = async (source: ResourceRecord) => {
     if ((source as any).isDummy) {
-      setNotice(`Dompet ${source.name} sudah kosong.`);
+      setNotice(`Dompet ${source.source} sudah kosong.`);
       return;
     }
-    const confirmed = window.confirm(`Hapus dompet ${source.name}?`);
+    const confirmed = window.confirm(`Hapus dompet ${source.source}?`);
     if (!confirmed) {
       return;
     }
 
     try {
-      await apiRequest(`/funding-sources/${source.idFundingSource}`, {
+      await apiRequest(`/resources/${source.idResource}`, {
         method: 'DELETE',
       });
       setNotice('Dompet berhasil dihapus.');
@@ -608,7 +581,7 @@ export function FinanceDashboard() {
             source: values.source,
             date: values.date,
             idCategory: values.idCategory ? Number(values.idCategory) : undefined,
-            idFundingSource: values.idFundingSource
+            idResource: values.idResource
           }),
         });
         setNotice('Transaksi berhasil diperbarui.');
@@ -908,13 +881,13 @@ export function FinanceDashboard() {
                 </article>
               ))
             : displaySources.map((source, index) => (
-                <article key={source.idFundingSource} className="account-card">
+                <article key={source.idResource} className="account-card">
                   <div className="account-head">
-                    <p className="account-title">{source.name}</p>
+                    <p className="account-title">{source.source}</p>
                     <div className="account-bank-logo">
-                      {source.name.toLowerCase().includes('mbanking') || source.name.toLowerCase().includes('bri') ? (
+                      {source.source.toLowerCase().includes('mbanking') || source.source.toLowerCase().includes('bri') ? (
                         <div style={{ background: '#0f52ba', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>BRI</div>
-                      ) : source.name.toLowerCase().includes('emoney') || source.name.toLowerCase().includes('jago') ? (
+                      ) : source.source.toLowerCase().includes('emoney') || source.source.toLowerCase().includes('jago') ? (
                         <div style={{ color: '#f3a847', fontSize: '16px', fontWeight: 'bold' }}>Jago</div>
                       ) : (
                         <div style={{ background: '#f1c74a', padding: '4px 8px', borderRadius: '4px' }}>
@@ -924,7 +897,7 @@ export function FinanceDashboard() {
                     </div>
                   </div>
 
-                  <p className="account-amount-value">{maskBalance(source.availableBalance || 0)}</p>
+                  <p className="account-amount-value">{maskBalance(source.balance || 0)}</p>
                   <p className="account-amount-label">Total amount</p>
 
                   <div className="card-footer">
