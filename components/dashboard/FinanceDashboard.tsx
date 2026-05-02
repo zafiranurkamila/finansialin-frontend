@@ -9,6 +9,8 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import { FundingSourceModal, type FundingSourceFormValues } from './FundingSourceModal';
 import { TransactionModal, type TransactionFormValues } from './TransactionModal';
+import { BudgetModal } from './BudgetModal';
+import { Chatbot } from './Chatbot';
 import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon } from '@/components/icons';
 import './dashboard.css';
 
@@ -53,17 +55,30 @@ function toneFromIndex(index: number) {
   return tones[index % tones.length];
 }
 
+function getChartMonths() {
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      name: d.toLocaleString('id-ID', { month: 'short' }),
+      month: d.getMonth(),
+      year: d.getFullYear(),
+    });
+  }
+  return months;
+}
+
 function monthlyIncomeChart(transactions: TransactionRecord[]) {
-  const months = ['Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep'];
-  const values = months.map((_, index) => {
-    const month = index + 4;
+  const months = getChartMonths();
+  const values = months.map((m) => {
     const total = transactions.reduce((sum, transaction) => {
       if (transaction.type !== 'income' || !transaction.date) {
         return sum;
       }
 
       const parsed = new Date(transaction.date);
-      if (parsed.getMonth() + 1 !== month) {
+      if (parsed.getMonth() !== m.month || parsed.getFullYear() !== m.year) {
         return sum;
       }
 
@@ -117,7 +132,41 @@ export function FinanceDashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
+  type CategoryRecord = {
+    idCategory: number;
+    name: string;
+    type: string;
+  };
+  const [categories, setCategories] = useState<CategoryRecord[]>([]);
+
+  type GoalRecord = {
+    idCategory: number | null;
+    name: string;
+    budgetAmount: number;
+    spent: number;
+    percent: number;
+    remaining: number;
+    overBudget: boolean;
+  };
+  const [goals, setGoals] = useState<GoalRecord[]>([]);
+
   const [activeTab, setActiveTab] = useState('Dashboard');
+
+  type BudgetRecord = {
+    idBudget: number;
+    idCategory: number;
+    amount: number;
+    spent: number;
+    percent: number;
+    period: string;
+    periodStart: string;
+    periodEnd: string;
+    category?: { name: string };
+  };
+  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [budgetSaving, setBudgetSaving] = useState(false);
+  const [budgetError, setBudgetError] = useState('');
 
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletMode, setWalletMode] = useState<'create' | 'edit'>('create');
@@ -139,16 +188,22 @@ export function FinanceDashboard() {
     setError('');
 
     try {
-      const [sourceData, transactionData, profileData, unreadData] = await Promise.all([
+      const [sourceData, transactionData, profileData, unreadData, goalsData, budgetsData, categoriesData] = await Promise.all([
         apiRequest<FundingSourceRecord[]>('/funding-sources'),
         apiRequest<{ data?: TransactionRecord[] }>('/transactions?per_page=50'),
         apiRequest<{ data?: UserProfile } | UserProfile>('/auth/profile').catch(() => null),
         apiRequest<{ count: number }>('/notifications/unread/count').catch(() => ({ count: 0 })),
+        apiRequest<{ data: GoalRecord[] }>('/budgets/goals').catch(() => ({ data: [] })),
+        apiRequest<BudgetRecord[]>('/budgets'),
+        apiRequest<CategoryRecord[]>('/categories').catch(() => []),
       ]);
 
       setSources(sourceData);
       setTransactions(transactionData.data ?? []);
       setUnreadCount(unreadData?.count ?? 0);
+      setGoals(goalsData.data || []);
+      setBudgets(budgetsData || []);
+      setCategories(categoriesData || []);
       
       if (profileData) {
         setUserProfile('data' in profileData && profileData.data ? profileData.data : (profileData as UserProfile));
@@ -215,6 +270,7 @@ export function FinanceDashboard() {
     [sources],
   );
 
+  const chartMonths = useMemo(() => getChartMonths(), []);
   const incomePoints = useMemo(() => monthlyIncomeChart(transactions), [transactions]);
   const chartLine = useMemo(() => chartPath(incomePoints), [incomePoints]);
 
@@ -241,13 +297,29 @@ export function FinanceDashboard() {
     return items.length > 0
       ? items
       : [
-          ['House', 42],
-          ['Food', 25],
-          ['Investing', 16],
-          ['Online Shop', 10],
-          ['Beauty', 7],
+          ['Rumah', 42],
+          ['Makan', 25],
+          ['Investasi', 16],
+          ['Belanja', 10],
+          ['Kecantikan', 7],
         ];
   }, [transactions]);
+
+  const activityColors = ['#f4c51a', '#f1d76a', '#c2a115', '#9a831c', '#6d5d14'];
+  const donutGradient = useMemo(() => {
+    const total = activityBreakdown.reduce((sum, [_, value]) => sum + value, 0);
+    if (total === 0) return 'conic-gradient(#e0e0e0 0 100%)';
+
+    let currentPercent = 0;
+    const segments = activityBreakdown.map(([_, value], index) => {
+      const percent = (value / total) * 100;
+      const start = currentPercent;
+      currentPercent += percent;
+      return `${activityColors[index % activityColors.length]} ${start}% ${currentPercent}%`;
+    });
+
+    return `conic-gradient(${segments.join(', ')})`;
+  }, [activityBreakdown]);
 
   const openCreateWallet = () => {
     setWalletMode('create');
@@ -359,10 +431,27 @@ export function FinanceDashboard() {
       setTransactionModalOpen(false);
       setNotice('Transaksi berhasil disimpan.');
       await loadDashboard();
-    } catch (requestError) {
-      setTransactionError(requestError instanceof Error ? requestError.message : 'Gagal menyimpan transaksi.');
+    } catch (err) {
+      setTransactionError(err instanceof Error ? err.message : 'Gagal menyimpan transaksi.');
     } finally {
       setTransactionSaving(false);
+    }
+  };
+
+  const handleBudgetSubmit = async (values: any) => {
+    setBudgetSaving(true);
+    setBudgetError('');
+    try {
+      await apiRequest('/budgets', {
+        method: 'POST',
+        body: JSON.stringify(values),
+      });
+      await loadDashboard();
+      setBudgetModalOpen(false);
+    } catch (err) {
+      setBudgetError(err instanceof Error ? err.message : 'Gagal menyimpan budget.');
+    } finally {
+      setBudgetSaving(false);
     }
   };
 
@@ -550,8 +639,8 @@ export function FinanceDashboard() {
               </svg>
 
               <div className="chart-axis">
-                {['Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep'].map((month) => (
-                  <span key={month}>{month}</span>
+                {chartMonths.map((m) => (
+                  <span key={`${m.name}-${m.year}`}>{m.name}</span>
                 ))}
               </div>
             </div>
@@ -569,7 +658,7 @@ export function FinanceDashboard() {
               <div
                 className="donut-chart"
                 style={{
-                  background: `conic-gradient(#f4c51a 0 42%, #f1d76a 42% 67%, #000 67% 84%, #9a831c 84% 100%)`,
+                  background: donutGradient,
                 }}
               >
                 <div className="donut-center">
@@ -581,7 +670,10 @@ export function FinanceDashboard() {
               <div className="legend-list" aria-label="Activity legend">
                 {activityBreakdown.map(([label], index) => (
                   <div key={label} className="legend-item">
-                    <span className={`legend-dot legend-${index + 1}`} />
+                    <span 
+                      className="legend-dot" 
+                      style={{ background: activityColors[index % activityColors.length] }} 
+                    />
                     <span>{label}</span>
                   </div>
                 ))}
@@ -611,7 +703,7 @@ export function FinanceDashboard() {
               <table>
                 <thead>
                   <tr>
-                    <th>Reciever</th>
+                    <th>Description</th>
                     <th>Type</th>
                     <th>Date</th>
                     <th>Amount</th>
@@ -640,25 +732,25 @@ export function FinanceDashboard() {
             </div>
 
             <div className="goals-list">
-              {sources.slice(0, 2).map((source, index) => {
-                const percentage = source.initialBalance > 0 ? Math.min(100, Math.round((source.availableBalance / source.initialBalance) * 100)) : 0;
+              {goals.slice(0, 3).map((goal, index) => {
+                const percentage = Math.min(100, Math.round(goal.percent));
                 return (
-                  <div key={source.idFundingSource} className="goal-item">
+                  <div key={goal.idCategory ?? index} className="goal-item">
                     <div className="goal-topline">
                       <div className="goal-icon">
-                        {index === 0 ? (
+                        {index % 2 === 0 ? (
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21.5 4c0 0-2 .5-3.5 2L14.5 9.5 6.3 7.7 5 9l6 4-3.5 3.5L5 15.5 3 17l1.5 2 2-1.5L8 19l4.5-3.5 4 6 1.3-1.3z"></path></svg>
                         ) : (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 10-4 4-4-4"/></svg>
                         )}
                       </div>
                       <div className="goal-info">
                         <div className="goal-title">
-                          <span>{source.name}</span>
+                          <span>{goal.name}</span>
                           <span>{percentage}%</span>
                         </div>
                         <div className="goal-amount">
-                          {formatCurrency(Number(source.availableBalance || 0))} / {formatCurrency(Number(source.initialBalance || 0))}
+                          {formatCurrency(goal.spent)} / {formatCurrency(goal.budgetAmount)}
                         </div>
                       </div>
                     </div>
@@ -671,7 +763,7 @@ export function FinanceDashboard() {
                 );
               })}
 
-              {!loading && sources.length === 0 ? <p className="empty-copy">Dompet akan tampil di sini setelah popup disimpan.</p> : null}
+              {!loading && goals.length === 0 ? <p className="empty-copy">Belum ada target budget yang dibuat.</p> : null}
             </div>
           </article>
         </section>
@@ -782,7 +874,69 @@ export function FinanceDashboard() {
         </section>
       )}
 
-      {['Budgeting', 'Statistics', 'Settings'].includes(activeTab) && (
+        {activeTab === 'Budgeting' && (
+          <section className="budgeting-view" style={{ padding: '20px 0' }}>
+            <div className="view-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <h1 style={{ fontSize: '1.8rem', fontWeight: 700 }}>My Budgets</h1>
+                <p style={{ color: '#666' }}>Manage your spending limits by category.</p>
+              </div>
+              <button className="add-goals-button" onClick={() => setBudgetModalOpen(true)}>
+                + Create Budget
+              </button>
+            </div>
+
+            <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+              {budgets.map((budget) => {
+                const percent = Math.min(100, budget.percent || 0);
+                const isOver = percent >= 100;
+                return (
+                  <article key={budget.idBudget} className="panel budget-card" style={{ padding: '24px', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <h3 style={{ fontWeight: 600 }}>{budget.category?.name || 'General'}</h3>
+                      <span style={{ fontSize: '0.8rem', color: '#888', textTransform: 'capitalize' }}>{budget.period}</span>
+                    </div>
+                    
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
+                        <span>{formatCurrency(budget.spent || 0)}</span>
+                        <span style={{ fontWeight: 600 }}>{formatCurrency(budget.amount)}</span>
+                      </div>
+                      <div className="progress-bar-bg" style={{ height: '8px', background: '#f0f0f0', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div 
+                          className="progress-bar-fill" 
+                          style={{ 
+                            width: `${percent}%`, 
+                            height: '100%', 
+                            background: isOver ? '#ef4444' : '#f1c74a',
+                            transition: 'width 0.5s ease'
+                          }} 
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', color: isOver ? '#ef4444' : '#666' }}>
+                        {isOver ? 'Over budget!' : `${100 - percent}% remaining`}
+                      </span>
+                      <div className="budget-dates" style={{ fontSize: '0.75rem', color: '#999' }}>
+                         {formatDate(budget.periodStart)} - {formatDate(budget.periodEnd)}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+
+              {budgets.length === 0 && (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: '#a0a0a0' }}>
+                  <p>No budgets set yet. Start by creating one for your categories!</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+      {['Statistics', 'Settings'].includes(activeTab) && (
         <div style={{ display: 'grid', placeItems: 'center', height: '60vh', color: '#a0a0a0' }}>
           <h2>{activeTab} feature is coming soon!</h2>
         </div>
@@ -809,9 +963,16 @@ export function FinanceDashboard() {
         onSubmit={handleTransactionSubmit}
       />
 
-      <button type="button" className="fab" aria-label="Chat">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-      </button>
+      <BudgetModal
+        open={budgetModalOpen}
+        categories={categories.filter(c => c.type === 'expense')}
+        loading={budgetSaving}
+        error={budgetError}
+        onClose={() => setBudgetModalOpen(false)}
+        onSubmit={handleBudgetSubmit}
+      />
+
+      <Chatbot />
     </main>
   );
 }

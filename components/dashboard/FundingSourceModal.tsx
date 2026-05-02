@@ -55,11 +55,23 @@ export function FundingSourceModal({
         <div className="modal-form">
           <label className="field modal-field">
             <span>Nama dompet</span>
-            <input
-              value={values.name}
-              onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
-              placeholder="MBanking"
-            />
+            {mode === 'create' ? (
+              <select
+                value={values.name}
+                onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
+              >
+                <option value="">Pilih dompet</option>
+                <option value="MBanking">MBanking</option>
+                <option value="Emoney">Emoney</option>
+                <option value="Cash">Cash</option>
+              </select>
+            ) : (
+              <input
+                value={values.name}
+                readOnly
+                style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+              />
+            )}
           </label>
 
           <label className="field modal-field">
