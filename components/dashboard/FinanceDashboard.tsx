@@ -297,14 +297,22 @@ export function FinanceDashboard() {
     });
   };
 
-  const fixedWalletNames = ['MBanking', 'Emoney', 'Cash'];
+  const fixedWalletNames = ['MBanking', 'E Money', 'Cash'];
   const displaySources = useMemo(() => {
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
     const fixed = fixedWalletNames.map(name => {
-      const existing = sources.find(s => s.source.toLowerCase() === name.toLowerCase());
+      const targetNormalized = normalize(name);
+      const existing = sources.find(s => normalize(s.source) === targetNormalized);
       if (existing) return existing;
       return { id: Math.floor(Math.random() * -10000), idResource: Math.floor(Math.random() * -10000), idUser: 0, source: name, balance: 0, isDummy: true } as ResourceRecord & { isDummy?: boolean };
     });
-    const others = sources.filter(s => !fixedWalletNames.some(name => s.source.toLowerCase() === name.toLowerCase()));
+    
+    const others = sources.filter(s => {
+      const sNormalized = normalize(s.source);
+      return !fixedWalletNames.some(name => normalize(name) === sNormalized);
+    });
+    
     return [...fixed, ...others];
   }, [sources]);
 

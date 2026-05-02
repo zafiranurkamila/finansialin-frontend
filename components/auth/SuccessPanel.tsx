@@ -14,14 +14,18 @@ async function upsertFundingSource(name: string, initialBalance: string) {
   const balanceValue = Number(initialBalance || 0);
   const response = await apiRequest<{ data: ResourceRecord[] }>('/resources');
   const existingSources = response.data || [];
-  const existing = existingSources.find((source) => source.source.toLowerCase() === name.toLowerCase());
+  
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const targetNameNormalized = normalize(name);
+  
+  const existing = existingSources.find((source) => normalize(source.source) === targetNameNormalized);
 
   if (existing) {
     return apiRequest<{ data: ResourceRecord }>(`/resources/${existing.idResource}`, {
       method: 'PUT',
       body: JSON.stringify({
-        source: name,
-        balance: balanceValue,
+        name: name,
+        initialBalance: balanceValue,
       }),
     });
   }
@@ -29,8 +33,8 @@ async function upsertFundingSource(name: string, initialBalance: string) {
   return apiRequest<{ data: ResourceRecord }>('/resources', {
     method: 'POST',
     body: JSON.stringify({
-      source: name,
-      balance: balanceValue,
+      name: name,
+      initialBalance: balanceValue,
     }),
   });
 }
