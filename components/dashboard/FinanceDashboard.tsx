@@ -138,7 +138,8 @@ export function FinanceDashboard() {
   const [loadingAi, setLoadingAi] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [txSearch, setTxSearch] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [txFilterMonth, setTxFilterMonth] = useState(new Date().getMonth());
   const [txFilterYear, setTxFilterYear] = useState(new Date().getFullYear());
   const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences'>('Profile');
@@ -344,24 +345,46 @@ export function FinanceDashboard() {
   const incomePoints = useMemo(() => monthlyIncomeChart(transactions), [transactions]);
   const chartLine = useMemo(() => chartPath(incomePoints), [incomePoints]);
 
-  const topTransactions = useMemo(
-    () =>
-      [...transactions]
-        .sort((left, right) => Number(new Date(right.date ?? 0)) - Number(new Date(left.date ?? 0)))
-        .slice(0, 4),
-    [transactions],
-  );
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
+      const matchesSearch = (t.description || '').toLowerCase().includes(globalSearch.toLowerCase()) || 
+                           (t.source || '').toLowerCase().includes(globalSearch.toLowerCase()) ||
+                           (t.category?.name || '').toLowerCase().includes(globalSearch.toLowerCase());
+      
+      // If searching (min 2 chars), ignore date filter
+      if (globalSearch.length >= 2) return matchesSearch;
+
       const d = new Date(t.date || '');
       const matchesDate = d.getMonth() === txFilterMonth && d.getFullYear() === txFilterYear;
-      const matchesSearch = (t.description || '').toLowerCase().includes(txSearch.toLowerCase()) || 
-                           (t.source || '').toLowerCase().includes(txSearch.toLowerCase());
       return matchesDate && matchesSearch;
     }).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-  }, [transactions, txFilterMonth, txFilterYear, txSearch]);
+  }, [transactions, txFilterMonth, txFilterYear, globalSearch]);
 
+  const filteredBudgets = useMemo(() => {
+    return budgets.filter(b => 
+      (b.category?.name || '').toLowerCase().includes(globalSearch.toLowerCase())
+    );
+  }, [budgets, globalSearch]);
+
+  const topTransactions = useMemo(() => {
+    return transactions
+      .filter(t => (t.description || '').toLowerCase().includes(globalSearch.toLowerCase()) || (t.category?.name || '').toLowerCase().includes(globalSearch.toLowerCase()))
+      .slice(0, 5);
+  }, [transactions, globalSearch]);
+
+  const quickSearchResults = useMemo(() => {
+    if (globalSearch.length < 2) return null;
+    const txMatches = transactions
+      .filter(t => (t.description || '').toLowerCase().includes(globalSearch.toLowerCase()))
+      .slice(0, 4);
+    const budgetMatches = budgets
+      .filter(b => (b.category?.name || '').toLowerCase().includes(globalSearch.toLowerCase()))
+      .slice(0, 2);
+    
+    if (txMatches.length === 0 && budgetMatches.length === 0) return null;
+    return { transactions: txMatches, budgets: budgetMatches };
+  }, [transactions, budgets, globalSearch]);
   const activityBreakdown = useMemo(() => {
     const expenseItems = filteredTransactions.filter((transaction) => transaction.type === 'expense');
     const totals = expenseItems.reduce<Record<string, number>>((accumulator, transaction) => {
@@ -764,7 +787,54 @@ export function FinanceDashboard() {
               <span className="search-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               </span>
-              <input type="search" placeholder="Type to search" aria-label="Search" />
+              <input 
+                type="search" 
+                placeholder={`Search in ${activeTab}...`} 
+                aria-label="Search" 
+                value={globalSearch}
+                onFocus={() => setShowSearchResults(true)}
+                onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                onChange={(e) => {
+                  setGlobalSearch(e.target.value);
+                  setShowSearchResults(true);
+                }}
+              />
+
+              {showSearchResults && quickSearchResults && (
+                <div className="search-results-dropdown">
+                  {quickSearchResults.transactions.length > 0 && (
+                    <div className="search-res-section">
+                      <p className="res-section-title">Transactions</p>
+                      {quickSearchResults.transactions.map(tx => (
+                        <div key={tx.idTransaction} className="search-res-item" onClick={() => { setActiveTab('Transactions'); setGlobalSearch(tx.description || ''); }}>
+                          <div className={`res-icon ${tx.type}`}>
+                            {tx.type === 'income' ? '↙' : '↗'}
+                          </div>
+                          <div className="res-info">
+                            <span className="res-name">{tx.description || tx.source}</span>
+                            <span className="res-meta">{formatDate(tx.date)} • {formatCurrency(tx.amount)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {quickSearchResults.budgets.length > 0 && (
+                    <div className="search-res-section">
+                      <p className="res-section-title">Budgets</p>
+                      {quickSearchResults.budgets.map(b => (
+                        <div key={b.idBudget} className="search-res-item" onClick={() => setActiveTab('Budgeting')}>
+                          <div className="res-icon budget">B</div>
+                          <div className="res-info">
+                            <span className="res-name">{b.category?.name}</span>
+                            <span className="res-meta">Target: {formatCurrency(b.amount)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </label>
             <button type="button" className="add-wallet-btn" onClick={openCreateWallet}>
               + Wallet
@@ -1091,15 +1161,7 @@ export function FinanceDashboard() {
           <section className="transactions-table-panel">
             <div className="table-toolbar">
               <div className="toolbar-left">
-                <label className="table-search">
-                  <span className="search-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
-                  <input 
-                    type="search" 
-                    placeholder="Search for description" 
-                    value={txSearch}
-                    onChange={(e) => setTxSearch(e.target.value)}
-                  />
-                </label>
+                {/* Search is now global in topbar */}
               </div>
               <div className="toolbar-right">
                 <select 
@@ -1199,7 +1261,7 @@ export function FinanceDashboard() {
             </div>
 
             <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-              {budgets.map((budget) => {
+              {filteredBudgets.map((budget) => {
                 const percent = Math.min(100, budget.percent || 0);
                 const isOver = percent >= 100;
                 return (
