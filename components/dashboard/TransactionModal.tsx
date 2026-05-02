@@ -20,6 +20,7 @@ export type CategoryRecord = {
 
 type Props = {
   open: boolean;
+  mode: 'create' | 'edit';
   sources: FundingSourceRecord[];
   initialValues: TransactionFormValues;
   loading?: boolean;
@@ -32,6 +33,7 @@ type EntryMode = 'select' | 'manual' | 'ocr';
 
 export function TransactionModal({
   open,
+  mode,
   sources,
   initialValues,
   loading = false,
@@ -51,14 +53,14 @@ export function TransactionModal({
   useEffect(() => {
     if (open) {
       setValues(initialValues);
-      setEntryMode('select');
+      setEntryMode(mode === 'edit' ? 'manual' : 'select');
       setOcrError('');
       setNewCategoryName('');
       apiRequest<CategoryRecord[]>('/categories')
         .then(data => setCategories(data))
         .catch(() => {});
     }
-  }, [initialValues, open]);
+  }, [initialValues, open, mode]);
 
   const sourceOptions = useMemo(() => sources.map((source) => source.name), [sources]);
   const filteredCategories = useMemo(() => categories.filter(c => c.type === values.type), [categories, values.type]);
@@ -138,9 +140,9 @@ export function TransactionModal({
       <section className="modal-card" role="dialog" aria-modal="true" aria-label="Transaction modal">
         <div className="modal-head">
           <div>
-            <p className="eyebrow">Tambah transaksi</p>
-            <h2>Catat income atau expense</h2>
-            <p>Gunakan ini untuk top up e-wallet, mbanking, cash, atau belanja keluar.</p>
+            <p className="eyebrow">{mode === 'edit' ? 'Edit Transaksi' : 'Tambah transaksi'}</p>
+            <h2>{mode === 'edit' ? 'Perbarui detail transaksi' : 'Catat income atau expense'}</h2>
+            <p>{mode === 'edit' ? 'Sesuaikan data transaksi Anda yang sudah ada.' : 'Gunakan ini untuk top up e-wallet, mbanking, cash, atau belanja keluar.'}</p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Tutup">
             ×
@@ -298,12 +300,12 @@ export function TransactionModal({
         {error && entryMode === 'manual' ? <p className="modal-error">{error}</p> : null}
 
         <div className="modal-actions">
-          <button type="button" className="text-button" onClick={() => entryMode === 'select' ? onClose() : setEntryMode('select')}>
-            {entryMode === 'select' ? 'Batal' : 'Kembali'}
+          <button type="button" className="text-button" onClick={() => (entryMode === 'select' || mode === 'edit') ? onClose() : setEntryMode('select')}>
+            {(entryMode === 'select' || mode === 'edit') ? 'Batal' : 'Kembali'}
           </button>
           {entryMode === 'manual' && (
             <button type="button" className="solid-button" onClick={handleModalSubmit} disabled={loading || isCreatingCategory}>
-              {loading || isCreatingCategory ? 'Menyimpan...' : 'Simpan transaksi'}
+              {loading || isCreatingCategory ? 'Menyimpan...' : (mode === 'edit' ? 'Update Transaksi' : 'Simpan transaksi')}
             </button>
           )}
         </div>

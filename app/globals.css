@@ -733,12 +733,14 @@ button {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  background: #f4f1ea;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s, color 0.3s;
 }
 
 .sidebar {
-  background: #f9f7f3;
-  border-right: 1px solid rgba(23, 23, 23, 0.08);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   padding: 24px 18px;
   display: flex;
   flex-direction: column;
@@ -847,8 +849,8 @@ button {
   width: min(360px, 42vw);
   height: 48px;
   border-radius: 999px;
-  background: #fff;
-  border: 1px solid rgba(23, 23, 23, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -870,8 +872,8 @@ button {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 1px solid rgba(23, 23, 23, 0.1);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   display: grid;
   place-items: center;
 }
@@ -887,11 +889,11 @@ button {
 }
 
 .account-card {
-  background: #fff;
+  background: var(--surface);
   border-radius: 22px;
   padding: 18px;
-  box-shadow: 0 14px 40px rgba(18, 17, 12, 0.08);
-  border: 1px solid rgba(23, 23, 23, 0.06);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
   min-height: 185px;
 }
 
@@ -979,11 +981,11 @@ button {
 }
 
 .panel {
-  background: #fff;
+  background: var(--surface);
   border-radius: 22px;
   padding: 18px;
-  border: 1px solid rgba(23, 23, 23, 0.06);
-  box-shadow: 0 14px 40px rgba(18, 17, 12, 0.06);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 
 .panel-head h2 {
@@ -993,12 +995,12 @@ button {
 
 .dropdown-chip,
 .add-goals-button {
-  border: 1px solid rgba(23, 23, 23, 0.14);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 999px;
   height: 36px;
   padding: 0 14px;
-  color: #5e5a55;
+  color: var(--text);
 }
 
 .chart-wrap {
@@ -1043,7 +1045,7 @@ button {
   position: absolute;
   inset: 22px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
 }
 
 .donut-center {
