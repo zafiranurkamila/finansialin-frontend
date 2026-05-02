@@ -4,45 +4,76 @@ import { useState, useRef, useEffect } from 'react';
 import { apiRequest } from '@/lib/api';
 
 type Message = {
-  role: 'user' | 'assistant';
+  id: string;
+  role: 'user' | 'ai';
   content: string;
 };
 
+const SUGGESTED_PROMPTS = [
+  "Tolong cek dong, berapa total saldoku sekarang?",
+  "Apa pengeluaran terbesar saya bulan ini?",
+  "Beri saya tips hemat minggu ini."
+];
+
 export function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Halo! Saya asisten Finansialin. Ada yang bisa saya bantu dengan keuangan Anda? 😊' }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Generate unique session ID on mount
+    setSessionId(`session_user_${Math.random().toString(36).substring(2, 11)}`);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isOpen]);
+  }, [messages, isLoading, isOpen]);
 
-  const handleSend = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMessage = input.trim();
+    const userMessage = text.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    const newMessageId = Math.random().toString(36).substring(2, 9);
+    setMessages(prev => [...prev, { id: newMessageId, role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
-      const response = await apiRequest<{ reply: string }>('/insights/chat', {
+      const response = await apiRequest<{ reply: string, type?: string }>('/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: userMessage })
+        body: JSON.stringify({ message: userMessage, session_id: sessionId })
       });
       
-      setMessages(prev => [...prev, { role: 'assistant', content: response.reply }]);
+      setMessages(prev => [...prev, { 
+        id: Math.random().toString(36).substring(2, 9), 
+        role: 'ai', 
+        content: response.reply 
+      }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Maaf, terjadi kesalahan koneksi ke server AI.' }]);
+      setMessages(prev => [...prev, { 
+        id: Math.random().toString(36).substring(2, 9), 
+        role: 'ai', 
+        content: 'Maaf, terjadi gangguan saat menghubungi server. Coba beberapa saat lagi.' 
+      }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const onSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    handleSend(input);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(input);
     }
   };
 
@@ -72,15 +103,48 @@ export function Chatbot() {
           </div>
           
           <div className="chat-messages" ref={scrollRef}>
-            {messages.map((m, i) => (
-              <div key={i} className={`message-wrapper ${m.role}`}>
-                <div className="message-bubble">
-                  {m.content}
+            {messages.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-avatar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 8V4m0 0L9 7m3-3l3 3" />
+                    <rect x="5" y="8" width="14" height="10" rx="2" />
+                    <circle cx="9" cy="13" r="1" fill="currentColor" />
+                    <circle cx="15" cy="13" r="1" fill="currentColor" />
+                    <path d="M10 16s1 1 2 1 2-1 2-1" />
+                  </svg>
+                </div>
+                <p className="greeting">Halo! Saya asisten keuangan Finansialin Anda. Ada yang bisa saya bantu hari ini?</p>
+                <div className="suggested-prompts">
+                  {SUGGESTED_PROMPTS.map((prompt, index) => (
+                    <button 
+                      key={index} 
+                      className="prompt-pill"
+                      onClick={() => handleSend(prompt)}
+                      disabled={isLoading}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
+            ) : (
+              messages.map((m) => (
+                <div key={m.id} className={`message-wrapper ${m.role}`}>
+                  <div className="message-bubble">
+                    {m.content.split('\n').map((line, i) => (
+                      <span key={i}>
+                        {line}
+                        <br />
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+            
             {isLoading && (
-              <div className="message-wrapper assistant">
+              <div className="message-wrapper ai">
                 <div className="message-bubble loading">
                   <span className="dot"></span>
                   <span className="dot"></span>
@@ -90,15 +154,21 @@ export function Chatbot() {
             )}
           </div>
 
-          <form className="chat-input-area" onSubmit={handleSend}>
+          <form className="chat-input-area" onSubmit={onSubmit}>
             <input 
               type="text" 
-              placeholder="Tanya soal keuangan..." 
+              placeholder="Ketik pesan..." 
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
               autoFocus
+              disabled={isLoading}
             />
-            <button type="submit" disabled={isLoading} className="send-btn">
+            <button 
+              type="submit" 
+              disabled={!input.trim() || isLoading} 
+              className="send-btn"
+            >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </button>
           </form>
@@ -141,7 +211,7 @@ export function Chatbot() {
           right: 0;
           width: 380px;
           max-width: calc(100vw - 48px);
-          height: 520px;
+          height: 550px;
           max-height: calc(100vh - 140px);
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(20px);
@@ -232,6 +302,82 @@ export function Chatbot() {
           flex-direction: column;
           gap: 16px;
           background: linear-gradient(to bottom, #ffffff, #f9f9f9);
+          scroll-behavior: smooth;
+        }
+
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          height: 100%;
+          padding: 0 10px;
+          animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .empty-avatar {
+          width: 56px;
+          height: 56px;
+          background: #f1c74a;
+          color: #171717;
+          border-radius: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 20px;
+          box-shadow: 0 8px 24px rgba(241, 199, 74, 0.3);
+        }
+
+        .empty-avatar svg {
+          width: 32px;
+          height: 32px;
+        }
+
+        .greeting {
+          font-size: 1rem;
+          color: #171717;
+          font-weight: 600;
+          line-height: 1.5;
+          margin-bottom: 24px;
+        }
+
+        .suggested-prompts {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          width: 100%;
+        }
+
+        .prompt-pill {
+          background: white;
+          border: 1px solid #e5e5e5;
+          padding: 12px 16px;
+          border-radius: 20px;
+          font-size: 0.85rem;
+          color: #4a4a4a;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: left;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .prompt-pill:hover:not(:disabled) {
+          border-color: #f1c74a;
+          background: #fffdf5;
+          color: #171717;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(241, 199, 74, 0.1);
+        }
+        
+        .prompt-pill:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .message-wrapper {
@@ -253,9 +399,10 @@ export function Chatbot() {
           line-height: 1.5;
           position: relative;
           box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+          word-wrap: break-word;
         }
 
-        .message-wrapper.assistant .message-bubble {
+        .message-wrapper.ai .message-bubble {
           align-self: flex-start;
           background: white;
           color: #222;
@@ -275,6 +422,8 @@ export function Chatbot() {
           display: flex;
           gap: 4px;
           padding: 14px 18px !important;
+          align-items: center;
+          height: 42px;
         }
         .dot {
           width: 6px;
@@ -297,14 +446,15 @@ export function Chatbot() {
           display: flex;
           gap: 12px;
           align-items: center;
+          border-top: 1px solid rgba(0,0,0,0.05);
         }
 
         .chat-input-area input {
           flex: 1;
           background: #f4f4f4;
           border: 1px solid transparent;
-          border-radius: 16px;
-          padding: 12px 18px;
+          border-radius: 20px;
+          padding: 14px 20px;
           font-size: 0.95rem;
           outline: none;
           transition: all 0.2s;
@@ -315,22 +465,39 @@ export function Chatbot() {
           border-color: #f1c74a;
           box-shadow: 0 0 0 4px rgba(241, 199, 74, 0.1);
         }
+        
+        .chat-input-area input:disabled {
+          background: #f9f9f9;
+          cursor: not-allowed;
+        }
 
         .send-btn {
           background: #171717;
           color: #f1c74a;
           border: none;
-          width: 44px;
-          height: 44px;
-          border-radius: 14px;
+          width: 48px;
+          height: 48px;
+          border-radius: 16px;
           display: grid;
           place-items: center;
           cursor: pointer;
           transition: all 0.2s;
+          flex-shrink: 0;
         }
-        .send-btn:hover { transform: scale(1.05); background: #222; }
-        .send-btn:active { transform: scale(0.95); }
-        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .send-btn:hover:not(:disabled) { 
+          transform: scale(1.05); 
+          background: #222; 
+        }
+        .send-btn:active:not(:disabled) { 
+          transform: scale(0.95); 
+        }
+        .send-btn:disabled { 
+          opacity: 0.5; 
+          cursor: not-allowed; 
+          transform: none; 
+          background: #e0e0e0;
+          color: #a0a0a0;
+        }
 
         .fab {
           width: 64px;
@@ -389,3 +556,4 @@ export function Chatbot() {
     </div>
   );
 }
+
