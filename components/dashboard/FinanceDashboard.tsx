@@ -15,6 +15,7 @@ import { TransactionModal, type TransactionFormValues } from './TransactionModal
 import { BudgetModal } from './BudgetModal';
 import { Chatbot } from './Chatbot';
 import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon } from '@/components/icons';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import './dashboard.css';
 
 const navigation = [
@@ -156,6 +157,9 @@ export function FinanceDashboard() {
   const [txFilterMonth, setTxFilterMonth] = useState(new Date().getMonth());
   const [txFilterYear, setTxFilterYear] = useState(new Date().getFullYear());
   const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences' | 'Account'>('Profile');
+  const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
 
   const { data: prefData, mutate: mutatePreferences } = useSWR<any>('/users/preferences', (url: string) => apiRequest<any>(url).catch(() => null));
   const preferences = prefData || { hideBalance: false, dailyReminder: true, budgetLimitAlert: true, weeklySummary: true };
@@ -698,6 +702,8 @@ export function FinanceDashboard() {
   };
 
   const handleDeleteAccount = async (password: string) => {
+    setDeleteAccountLoading(true);
+    setDeleteAccountError('');
     try {
       await apiRequest('/users/account', {
         method: 'DELETE',
@@ -710,7 +716,9 @@ export function FinanceDashboard() {
         window.location.assign('/');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal menghapus akun. Pastikan password Anda benar.');
+      setDeleteAccountError(err instanceof Error ? err.message : 'Gagal menghapus akun. Pastikan password Anda benar.');
+    } finally {
+      setDeleteAccountLoading(false);
     }
   };
 
@@ -1789,12 +1797,7 @@ export function FinanceDashboard() {
                     </p>
                     
                     <button 
-                      onClick={() => {
-                        const pass = window.prompt('Silakan masukkan password Anda untuk mengonfirmasi penghapusan akun:');
-                        if (pass) {
-                          handleDeleteAccount(pass);
-                        }
-                      }}
+                      onClick={() => setDeleteAccountModalOpen(true)}
                       style={{ 
                         background: '#ef4444', 
                         color: 'white', 
@@ -1851,6 +1854,16 @@ export function FinanceDashboard() {
       />
 
       <Chatbot />
+
+      <ConfirmDeleteModal
+        open={deleteAccountModalOpen}
+        title="Hapus Akun Anda?"
+        message="Tindakan ini permanen. Semua data transaksi, budget, dan dompet Anda akan dihapus selamanya."
+        loading={deleteAccountLoading}
+        error={deleteAccountError}
+        onClose={() => setDeleteAccountModalOpen(false)}
+        onConfirm={handleDeleteAccount}
+      />
 
       {confirmModal.open && (
         <div className="modal-backdrop confirm-backdrop" style={{ zIndex: 1000 }}>
