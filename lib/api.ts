@@ -28,7 +28,11 @@ export type TransactionRecord = {
 };
 
 const AUTH_STORAGE_KEY = 'finansialin_auth_tokens';
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000/api';
+let _baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000/api';
+if (_baseUrl && !_baseUrl.endsWith('/api')) {
+  _baseUrl = `${_baseUrl}/api`;
+}
+const API_BASE_URL = _baseUrl;
 
 export type ApiRequestOptions = RequestInit & {
   authToken?: string | null;

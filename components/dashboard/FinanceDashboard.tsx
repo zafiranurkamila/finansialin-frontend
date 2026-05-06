@@ -114,6 +114,18 @@ function chartPath(points: number[]) {
 export function FinanceDashboard() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    if (notice) {
+      const timer = setTimeout(() => setNotice(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notice]);
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const { data: sourcesResp, mutate: mutateSources } = useSWR<{ data: ResourceRecord[] }>('/resources', fetcher);
   const sources = sourcesResp?.data || [];
@@ -149,7 +161,7 @@ export function FinanceDashboard() {
   const [reportMonth, setReportMonth] = useState(new Date().getMonth());
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   
-  const { data: insightResp, mutate: mutateAiInsight, isValidating: loadingAi } = useSWR<{ summary: string }>('/insights/dashboard-summary', (url: string) => apiRequest<{ summary: string }>(url).catch(() => ({ summary: 'Belum ada insight AI saat ini. Terus catat transaksimu ya!' })));
+  const { data: insightResp, mutate: mutateAiInsight, isValidating: loadingAi } = useSWR<{ summary: string }>('/ai/dashboard-summary', (url: string) => apiRequest<{ summary: string }>(url).catch(() => ({ summary: 'Belum ada insight AI saat ini. Terus catat transaksimu ya!' })));
   const aiInsight = insightResp?.summary || 'Belum ada insight AI saat ini. Terus catat transaksimu ya!';
 
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -219,6 +231,30 @@ export function FinanceDashboard() {
   const [budgetSearch, setBudgetSearch] = useState('');
   const [budgetFilterPeriod, setBudgetFilterPeriod] = useState('all');
   const [budgetFilterStatus, setBudgetFilterStatus] = useState<'all' | 'safe' | 'over'>('all');
+  
+  const [hasAlertedOverBudget, setHasAlertedOverBudget] = useState(false);
+  const [overBudgetModalOpen, setOverBudgetModalOpen] = useState(false);
+  const [overBudgetNames, setOverBudgetNames] = useState<string>('');
+
+  useEffect(() => {
+    if (activeTab === 'Budgeting' && budgets.length > 0 && !hasAlertedOverBudget) {
+      const overBudgets = budgets.filter(b => (b.percent || 0) >= 100);
+      if (overBudgets.length > 0) {
+        setOverBudgetNames(overBudgets.map(b => b.category?.name || 'General').join(', '));
+        setOverBudgetModalOpen(true);
+      }
+      setHasAlertedOverBudget(true);
+    } else if (activeTab !== 'Budgeting') {
+      setHasAlertedOverBudget(false);
+    }
+  }, [budgets, activeTab, hasAlertedOverBudget]);
+
+  useEffect(() => {
+    if (overBudgetModalOpen) {
+      const timer = setTimeout(() => setOverBudgetModalOpen(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [overBudgetModalOpen]);
 
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletMode, setWalletMode] = useState<'create' | 'edit'>('create');
@@ -413,6 +449,43 @@ export function FinanceDashboard() {
   const totalIncome = useMemo(() => transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0), [transactions]);
   const totalExpense = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0), [transactions]);
   const totalSavings = useMemo(() => totalIncome - totalExpense, [totalIncome, totalExpense]);
+
+  const { trendIncome, trendExpense, trendSavings, trendBalance } = useMemo(() => {
+    const now = new Date();
+    const currentM = now.getMonth();
+    const currentY = now.getFullYear();
+    const lastM = currentM === 0 ? 11 : currentM - 1;
+    const lastY = currentM === 0 ? currentY - 1 : currentY;
+
+    let cInc = 0, cExp = 0, lInc = 0, lExp = 0;
+    transactions.forEach(t => {
+      if (!t.date) return;
+      const d = new Date(t.date);
+      const amt = Number(t.amount || 0);
+      if (d.getMonth() === currentM && d.getFullYear() === currentY) {
+        if (t.type === 'income') cInc += amt;
+        else cExp += amt;
+      } else if (d.getMonth() === lastM && d.getFullYear() === lastY) {
+        if (t.type === 'income') lInc += amt;
+        else lExp += amt;
+      }
+    });
+    const cSav = cInc - cExp;
+    const lSav = lInc - lExp;
+
+    const calcTrend = (c: number, l: number) => {
+      if (l === 0) return c > 0 ? '+100%' : '0%';
+      const pct = ((c - l) / l) * 100;
+      return `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`;
+    };
+
+    return {
+      trendIncome: calcTrend(cInc, lInc),
+      trendExpense: calcTrend(cExp, lExp),
+      trendSavings: calcTrend(cSav, lSav),
+      trendBalance: calcTrend(totalAvailable, totalAvailable - cSav) // Rough estimate
+    };
+  }, [transactions, totalAvailable]);
 
   const categoryStats = useMemo(() => {
     const stats: Record<string, { amount: number, color: string }> = {};
@@ -702,7 +775,7 @@ export function FinanceDashboard() {
     if (!file) return;
 
     const formData = new FormData();
-    formData.append('receipt', file);
+    formData.append('receiptImage', file);
 
     setOcrLoading(true);
     setNotice('AI sedang membaca struk belanja Anda...');
@@ -710,7 +783,7 @@ export function FinanceDashboard() {
       // Note: apiRequest helper might need adjustment for FormData if it strictly uses JSON
       // Assuming a standard fetch for FormData
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/insights/receipt-ocr`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/ai/receipt-ocr`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -1036,19 +1109,6 @@ export function FinanceDashboard() {
           </div>
 
           <div className="dashboard-right-col" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* AI Insight Card Moved to Right */}
-            <div className="panel ai-insight-card" style={{ background: 'linear-gradient(135deg, #171717 0%, #333 100%)', color: 'white', border: 'none', position: 'relative', overflow: 'hidden', padding: '24px' }}>
-               <div style={{ position: 'absolute', right: '-10px', top: '-10px', fontSize: '60px', opacity: 0.1, transform: 'rotate(15deg)' }}>✨</div>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ background: '#f1c74a', padding: '6px', borderRadius: '8px' }}>
-                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#171717" strokeWidth="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                  </div>
-                  <h4 style={{ fontWeight: 700, margin: 0, fontSize: '1.1rem' }}>AI Insight</h4>
-               </div>
-               <p style={{ fontSize: '0.9rem', lineHeight: '1.5', opacity: 0.9, margin: 0 }}>
-                  {loadingAi ? 'AI sedang menganalisis...' : aiInsight}
-               </p>
-            </div>
 
             <article className="panel activity-panel">
               <div className="panel-head">
@@ -1130,7 +1190,7 @@ export function FinanceDashboard() {
 
           <article className="panel goals-panel">
             <div className="panel-head compact-head">
-              <h2>My Goals</h2>
+              <h2>My Budget</h2>
               <button type="button" className="add-goals-button" onClick={() => setBudgetModalOpen(true)}>
                 + Goal
               </button>
@@ -1180,7 +1240,7 @@ export function FinanceDashboard() {
               </div>
               <p className="stat-label">Total Balance</p>
               <h3 className="stat-value">{maskBalance(totalAvailable)}</h3>
-              <div className="stat-trend"><span className="trend-badge">+15% ↗</span> than last month</div>
+              <div className="stat-trend"><span className="trend-badge">{trendBalance} {trendBalance.startsWith('-') ? '↙' : '↗'}</span> than last month</div>
             </div>
             
             <div className="stat-card yellow">
@@ -1189,7 +1249,7 @@ export function FinanceDashboard() {
               </div>
               <p className="stat-label">Total Income</p>
               <h3 className="stat-value">{formatCurrency(transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0))}</h3>
-              <div className="stat-trend"><span className="trend-badge dark">+30% ↗</span> than last month</div>
+              <div className="stat-trend"><span className="trend-badge dark">{trendIncome} {trendIncome.startsWith('-') ? '↙' : '↗'}</span> than last month</div>
             </div>
 
             <div className="stat-card dark">
@@ -1198,7 +1258,7 @@ export function FinanceDashboard() {
               </div>
               <p className="stat-label">Total Expenses</p>
               <h3 className="stat-value">{formatCurrency(transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0))}</h3>
-              <div className="stat-trend"><span className="trend-badge">-11% ↙</span> than last month</div>
+              <div className="stat-trend"><span className="trend-badge">{trendExpense} {trendExpense.startsWith('-') ? '↙' : '↗'}</span> than last month</div>
             </div>
 
             <div className="stat-card yellow">
@@ -1207,7 +1267,7 @@ export function FinanceDashboard() {
               </div>
               <p className="stat-label">Total Savings</p>
               <h3 className="stat-value">{formatCurrency(totalAvailable)}</h3>
-              <div className="stat-trend"><span className="trend-badge dark">+15% ↗</span> than last month</div>
+              <div className="stat-trend"><span className="trend-badge dark">{trendSavings} {trendSavings.startsWith('-') ? '↙' : '↗'}</span> than last month</div>
             </div>
           </div>
 
@@ -2081,6 +2141,20 @@ export function FinanceDashboard() {
               >
                 {confirmModal.confirmText || 'Confirm'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {overBudgetModalOpen && (
+        <div className="modal-backdrop confirm-backdrop" style={{ zIndex: 1000 }}>
+          <div className="confirm-modal-card" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <div className="confirm-icon" style={{ background: '#fee2e2', color: '#ef4444', margin: '0 auto 16px' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <h3>Over Budget!</h3>
+            <p>Pengeluaran kamu telah melebihi batas budget untuk kategori:<br/><strong style={{ color: '#ef4444', display: 'block', marginTop: '8px' }}>{overBudgetNames}</strong></p>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', width: '100%' }}>
+              <button className="solid-button" onClick={() => setOverBudgetModalOpen(false)} style={{ padding: '12px 32px' }}>Saya Mengerti</button>
             </div>
           </div>
         </div>

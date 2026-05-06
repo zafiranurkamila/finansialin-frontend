@@ -82,7 +82,7 @@ export function TransactionModal({
 
     try {
       // Assuming OCR API returns { amount, description, date } or similar
-      const result = await apiRequest<any>('/insights/receipt-ocr', {
+      const result = await apiRequest<any>('/ai/receipt-ocr', {
         method: 'POST',
         body: formData,
       });
