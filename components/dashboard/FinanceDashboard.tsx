@@ -889,61 +889,77 @@ export function FinanceDashboard() {
     let html = `
       <html>
       <head>
-        <title>Laporan Finansialin - ${monthName} ${reportYear}</title>
+        <title>Laporan Keuangan Finansialin - ${monthName} ${reportYear}</title>
         <style>
-          body { font-family: 'Courier New', Courier, monospace; margin: 0; padding: 20px; color: #000; background: #f9fafb; }
-          .receipt { max-width: 600px; margin: 0 auto; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px; padding: 30px; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px dashed #e5e7eb; padding-bottom: 20px; }
-          .header h2 { margin: 0; font-size: 1.8rem; color: #111827; letter-spacing: 1px; }
-          .header p { margin: 8px 0 0; font-size: 1rem; color: #4b5563; }
-          .section { margin-bottom: 24px; }
-          .section-title { font-weight: bold; margin-bottom: 12px; font-size: 0.9rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; color: #374151; }
-          .total-row { display: flex; justify-content: space-between; margin-top: 16px; border-top: 2px dashed #e5e7eb; padding-top: 16px; font-weight: bold; font-size: 1.15rem; color: #111827; }
-          .tx-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; }
-          .tx-item:last-child { border-bottom: none; }
-          .tx-title { font-weight: 600; color: #111827; }
-          .tx-meta { color: #6b7280; font-size: 0.85rem; margin-top: 4px; }
-          .footer { text-align: center; margin-top: 40px; font-size: 0.85rem; color: #9ca3af; }
-          @media print {
-            body { background: white; padding: 0; }
-            .receipt { box-shadow: none; border: none; padding: 0; max-width: 100%; }
-          }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #fff; color: #333; margin: 0; padding: 40px; }
+          .report-container { max-width: 800px; margin: 0 auto; }
+          .header { border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+          .header h1 { margin: 0; font-size: 24px; color: #000; text-transform: uppercase; letter-spacing: 1px; }
+          .header p { margin: 5px 0 0; color: #555; font-size: 14px; }
+          
+          .summary-table { width: 100%; margin-bottom: 40px; border-collapse: collapse; }
+          .summary-table td { padding: 10px; border: 1px solid #ddd; font-size: 14px; }
+          .summary-table td.label { font-weight: bold; background: #f9f9f9; width: 40%; }
+          .summary-table td.value { text-align: right; }
+          
+          .section-title { font-size: 16px; font-weight: bold; color: #000; margin-bottom: 15px; text-transform: uppercase; }
+          
+          .tx-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 14px; }
+          .tx-table th { padding: 12px; text-align: left; border-bottom: 2px solid #000; font-weight: bold; }
+          .tx-table td { padding: 12px; border-bottom: 1px solid #ddd; }
+          .tx-table th.right, .tx-table td.right { text-align: right; }
+          
+          .footer { margin-top: 50px; font-size: 12px; color: #777; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
         </style>
       </head>
       <body>
-        <div class="receipt">
+        <div class="report-container">
           <div class="header">
-            <h2>FINANSIALIN</h2>
-            <p>Laporan Keuangan: ${monthName} ${reportYear}</p>
+            <h1>Laporan Keuangan</h1>
+            <p>Periode: ${monthName} ${reportYear}</p>
           </div>
           
-          <div class="section">
-            <div class="section-title">Ringkasan</div>
-            <div class="row"><span>Total Pemasukan</span><span style="color: #059669;">+ ${formatCurrency(reportData.income)}</span></div>
-            <div class="row"><span>Total Pengeluaran</span><span style="color: #dc2626;">- ${formatCurrency(reportData.expense)}</span></div>
-            <div class="total-row"><span>Net Savings</span><span>${formatCurrency(reportData.income - reportData.expense)}</span></div>
-          </div>
+          <div class="section-title">Ringkasan</div>
+          <table class="summary-table">
+            <tr>
+              <td class="label">Total Pemasukan</td>
+              <td class="value">${formatCurrency(reportData.income)}</td>
+            </tr>
+            <tr>
+              <td class="label">Total Pengeluaran</td>
+              <td class="value">${formatCurrency(reportData.expense)}</td>
+            </tr>
+            <tr>
+              <td class="label">Net Savings</td>
+              <td class="value"><strong>${formatCurrency(reportData.income - reportData.expense)}</strong></td>
+            </tr>
+          </table>
 
-          <div class="section" style="margin-top: 30px;">
-            <div class="section-title">Detail Transaksi</div>
-            ${reportData.transactions.length === 0 ? '<div class="row" style="color:#9ca3af;">Tidak ada transaksi</div>' : ''}
-            ${reportData.transactions.map(t => `
-              <div class="tx-item">
-                <div class="row tx-title">
-                  <span>${t.description || '-'}</span>
-                  <span style="color: ${t.type === 'expense' ? '#dc2626' : '#059669'}">${t.type === 'expense' ? '-' : '+'}${formatCurrency(Number(t.amount))}</span>
-                </div>
-                <div class="tx-meta">
-                  <span>${formatDate(t.date)} &bull; ${t.category?.name || 'Umum'} &bull; ${t.source || '-'}</span>
-                </div>
-              </div>
-            `).join('')}
-          </div>
+          <div class="section-title">Detail Transaksi</div>
+          <table class="tx-table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Deskripsi</th>
+                <th>Kategori</th>
+                <th class="right">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reportData.transactions.length === 0 ? '<tr><td colspan="4" style="text-align: center; color: #999; padding: 20px;">Tidak ada transaksi</td></tr>' : ''}
+              ${reportData.transactions.map(t => `
+                <tr>
+                  <td>${formatDate(t.date)}</td>
+                  <td>${t.description || '-'}</td>
+                  <td>${t.category?.name || 'Umum'}</td>
+                  <td class="right">${t.type === 'expense' ? '-' : '+'}${formatCurrency(Number(t.amount))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
 
           <div class="footer">
-            <p>Dicetak pada: ${new Date().toLocaleString('id-ID')}</p>
-            <p>Terima kasih telah menggunakan Finansialin!</p>
+            <p>Dokumen ini dicetak dari aplikasi Finansialin pada ${new Date().toLocaleString('id-ID')}</p>
           </div>
         </div>
         <script>
@@ -1897,9 +1913,11 @@ export function FinanceDashboard() {
                             <h4 style={{ fontWeight: 700, marginBottom: '16px' }}>Status Keuangan</h4>
                             <div style={{ padding: '20px', borderRadius: '16px', border: '1px dashed #ddd', textAlign: 'center' }}>
                                <p style={{ fontSize: '0.9rem', color: '#555' }}>
-                                  {reportData.income > reportData.expense 
-                                    ? "Anda berhasil menabung bulan ini! Pertahankan performa ini." 
-                                    : "Pengeluaran Anda lebih besar dari pemasukan. Coba cek kembali daftar belanja Anda."}
+                                  {reportData.budgets.some(b => b.percent >= 100) 
+                                     ? "Wah, ada kategori yang over-budget! Mari coba tekan pengeluaran di kategori tersebut." 
+                                     : reportData.income > reportData.expense 
+                                       ? "Anda berhasil menabung bulan ini! Semua budget terkendali. Pertahankan performa ini." 
+                                       : "Pengeluaran Anda lebih besar dari pemasukan. Coba cek kembali daftar belanja Anda."}
                                </p>
                             </div>
                          </div>
