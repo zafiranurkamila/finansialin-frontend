@@ -48,9 +48,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             {showActions ? <span className="typing-cursor" aria-hidden="true" /> : null}
           </div>
 
-          <p className="supporting-copy">
-            Hai Pengguna.
-          </p>
 
           {children}
         </div>
