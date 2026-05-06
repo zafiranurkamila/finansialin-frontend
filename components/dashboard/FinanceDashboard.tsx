@@ -1570,10 +1570,6 @@ export function FinanceDashboard() {
                   Laporan Keuangan
                 </button>
               </div>
-              <div style={{ background: '#171717', color: '#f1c74a', padding: '10px 20px', borderRadius: '16px', fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="M12 6v6l4 2"/></svg>
-                 AI Dashboard Active
-              </div>
             </div>
 
             <div className="stats-content" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
