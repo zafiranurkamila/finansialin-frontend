@@ -9,6 +9,12 @@ type Message = {
   content: string;
 };
 
+// Format history yang dikirim ke backend (sesuai validasi Laravel)
+type ChatHistoryItem = {
+  role: 'user' | 'model';
+  text: string;
+};
+
 const SUGGESTED_PROMPTS = [
   "Tolong cek dong, berapa total saldoku sekarang?",
   "Apa pengeluaran terbesar saya bulan ini?",
@@ -21,6 +27,8 @@ export function Chatbot() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
+  // Menyimpan history percakapan untuk dikirim ke backend (multi-turn context)
+  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,22 +51,57 @@ export function Chatbot() {
     setMessages(prev => [...prev, { id: newMessageId, role: 'user', content: userMessage }]);
     setIsLoading(true);
 
+    // Snapshot history sebelum request agar tidak race-condition
+    const historySnapshot = [...chatHistory];
+
     try {
       const response = await apiRequest<{ reply: string, type?: string }>('/ai/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: userMessage, session_id: sessionId })
+        body: JSON.stringify({
+          message: userMessage,
+          session_id: sessionId,
+          // Kirim history percakapan supaya AI punya konteks multi-turn
+          history: historySnapshot,
+        }),
       });
-      
-      setMessages(prev => [...prev, { 
-        id: Math.random().toString(36).substring(2, 9), 
-        role: 'ai', 
-        content: response.reply 
+
+      const aiReply = response.reply;
+
+      setMessages(prev => [...prev, {
+        id: Math.random().toString(36).substring(2, 9),
+        role: 'ai',
+        content: aiReply,
       }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { 
-        id: Math.random().toString(36).substring(2, 9), 
-        role: 'ai', 
-        content: 'Maaf, terjadi gangguan saat menghubungi server. Coba beberapa saat lagi.' 
+
+      // Simpan giliran user + AI ke history untuk request berikutnya
+      setChatHistory(prev => [
+        ...prev,
+        { role: 'user', text: userMessage },
+        { role: 'model', text: aiReply },
+      ]);
+    } catch (err: unknown) {
+      // Tampilkan pesan error yang spesifik berdasarkan status HTTP
+      const status = (err as { status?: number })?.status;
+      let errorMsg = 'Maaf, terjadi gangguan saat menghubungi server. Coba beberapa saat lagi.';
+
+      if (status === 401) {
+        errorMsg = 'Sesi kamu sudah berakhir. Silakan login ulang untuk melanjutkan.';
+      } else if (status === 403) {
+        // Safety net — shouldn't happen for valid sessions
+        errorMsg = 'Akses ditolak. Pastikan kamu sudah login dengan benar.';
+      } else if (status === 422) {
+        errorMsg = 'Format pesan tidak valid. Coba kirim pesan lagi.';
+      } else if (status === 502) {
+        // Backend maps Gemini API errors (invalid key, quota, model access) → 502
+        errorMsg = 'Layanan AI sedang tidak tersedia. Coba beberapa saat lagi. 🔧';
+      } else if (status === 500) {
+        errorMsg = 'Terjadi kesalahan pada server. Coba beberapa saat lagi.';
+      }
+
+      setMessages(prev => [...prev, {
+        id: Math.random().toString(36).substring(2, 9),
+        role: 'ai',
+        content: errorMsg,
       }]);
     } finally {
       setIsLoading(false);
