@@ -880,6 +880,114 @@ export function FinanceDashboard() {
     return formatCurrency(Number(amount));
   };
 
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const monthName = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][reportMonth];
+    
+    let html = `
+      <html>
+      <head>
+        <title>Laporan Finansialin - ${monthName} ${reportYear}</title>
+        <style>
+          body { font-family: 'Courier New', Courier, monospace; margin: 0; padding: 20px; color: #000; background: #f9fafb; }
+          .receipt { max-width: 600px; margin: 0 auto; background: #fff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px; padding: 30px; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px dashed #e5e7eb; padding-bottom: 20px; }
+          .header h2 { margin: 0; font-size: 1.8rem; color: #111827; letter-spacing: 1px; }
+          .header p { margin: 8px 0 0; font-size: 1rem; color: #4b5563; }
+          .section { margin-bottom: 24px; }
+          .section-title { font-weight: bold; margin-bottom: 12px; font-size: 0.9rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; color: #374151; }
+          .total-row { display: flex; justify-content: space-between; margin-top: 16px; border-top: 2px dashed #e5e7eb; padding-top: 16px; font-weight: bold; font-size: 1.15rem; color: #111827; }
+          .tx-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; }
+          .tx-item:last-child { border-bottom: none; }
+          .tx-title { font-weight: 600; color: #111827; }
+          .tx-meta { color: #6b7280; font-size: 0.85rem; margin-top: 4px; }
+          .footer { text-align: center; margin-top: 40px; font-size: 0.85rem; color: #9ca3af; }
+          @media print {
+            body { background: white; padding: 0; }
+            .receipt { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <h2>FINANSIALIN</h2>
+            <p>Laporan Keuangan: ${monthName} ${reportYear}</p>
+          </div>
+          
+          <div class="section">
+            <div class="section-title">Ringkasan</div>
+            <div class="row"><span>Total Pemasukan</span><span style="color: #059669;">+ ${formatCurrency(reportData.income)}</span></div>
+            <div class="row"><span>Total Pengeluaran</span><span style="color: #dc2626;">- ${formatCurrency(reportData.expense)}</span></div>
+            <div class="total-row"><span>Net Savings</span><span>${formatCurrency(reportData.income - reportData.expense)}</span></div>
+          </div>
+
+          <div class="section" style="margin-top: 30px;">
+            <div class="section-title">Detail Transaksi</div>
+            ${reportData.transactions.length === 0 ? '<div class="row" style="color:#9ca3af;">Tidak ada transaksi</div>' : ''}
+            ${reportData.transactions.map(t => `
+              <div class="tx-item">
+                <div class="row tx-title">
+                  <span>${t.description || '-'}</span>
+                  <span style="color: ${t.type === 'expense' ? '#dc2626' : '#059669'}">${t.type === 'expense' ? '-' : '+'}${formatCurrency(Number(t.amount))}</span>
+                </div>
+                <div class="tx-meta">
+                  <span>${formatDate(t.date)} &bull; ${t.category?.name || 'Umum'} &bull; ${t.source || '-'}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="footer">
+            <p>Dicetak pada: ${new Date().toLocaleString('id-ID')}</p>
+            <p>Terima kasih telah menggunakan Finansialin!</p>
+          </div>
+        </div>
+        <script>
+          window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 500); }
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExportExcel = () => {
+    const monthName = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][reportMonth];
+    let csv = `LAPORAN KEUANGAN FINANSIALIN - ${monthName.toUpperCase()} ${reportYear}\n\n`;
+    
+    // Summary Section
+    csv += "RINGKASAN\n";
+    csv += `Total Pemasukan,="${reportData.income}"\n`;
+    csv += `Total Pengeluaran,="${reportData.expense}"\n`;
+    csv += `Net Savings,="${reportData.income - reportData.expense}"\n\n`;
+
+    // Transactions Section
+    csv += "DETAIL TRANSAKSI\n";
+    csv += "Tanggal,Deskripsi,Kategori,Tipe,Sumber/Dompet,Jumlah\n";
+    
+    reportData.transactions.forEach(t => {
+      // Escape commas in description
+      const desc = `"${(t.description || '-').replace(/"/g, '""')}"`;
+      const cat = `"${(t.category?.name || 'Umum').replace(/"/g, '""')}"`;
+      const source = `"${(t.source || '-').replace(/"/g, '""')}"`;
+      csv += `${t.date},${desc},${cat},${t.type},${source},"${t.amount}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Laporan_Finansialin_${monthName}_${reportYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <main className="dashboard-shell">
       <aside className="sidebar">
@@ -1736,25 +1844,17 @@ export function FinanceDashboard() {
                         </div>
                         <div style={{ display: 'flex', gap: '12px' }}>
                            <button 
-                             onClick={() => window.print()}
+                             onClick={handleExportPDF}
                              style={{ background: '#171717', color: '#f1c74a', border: 'none', padding: '10px 20px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                               Export PDF
                            </button>
                            <button 
-                             onClick={() => {
-                                const csvContent = "data:text/csv;charset=utf-8," 
-                                  + "Tanggal,Deskripsi,Tipe,Kategori,Jumlah\n"
-                                  + reportData.transactions.map(t => `${t.date},${t.description},${t.type},${t.category?.name || '-'},${t.amount}`).join("\n");
-                                const encodedUri = encodeURI(csvContent);
-                                const link = document.createElement("a");
-                                link.setAttribute("href", encodedUri);
-                                link.setAttribute("download", `Laporan_${reportMonth + 1}_${reportYear}.csv`);
-                                document.body.appendChild(link);
-                                link.click();
-                             }}
+                             onClick={handleExportExcel}
                              style={{ background: '#f1c74a', color: '#171717', border: 'none', padding: '10px 20px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2v4H8z"/><path d="M12 13h2v4h-2z"/></svg>
                               Export Excel
                            </button>
                         </div>
