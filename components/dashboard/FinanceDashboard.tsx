@@ -13,8 +13,8 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { FundingSourceModal, type FundingSourceFormValues } from './FundingSourceModal';
 import { TransactionModal, type TransactionFormValues } from './TransactionModal';
 import { BudgetModal } from './BudgetModal';
-import { Chatbot } from './Chatbot';
-import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon } from '@/components/icons';
+import { AiChatView } from './AiChatView';
+import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon, CpuIcon } from '@/components/icons';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import './dashboard.css';
 
@@ -23,6 +23,7 @@ const navigation = [
   { name: 'Transactions', icon: <TransactionsIcon /> },
   { name: 'Budgeting', icon: <BudgetingIcon /> },
   { name: 'Statistics', icon: <StatisticsIcon /> },
+  { name: 'FinBot AI', icon: <CpuIcon /> },
   { name: 'Settings', icon: <SettingsIcon /> },
 ];
 
@@ -2178,10 +2179,11 @@ export function FinanceDashboard() {
                 </div>
               </div>
             )}
-          </article>
+           </article>
         </section>
       )}
-      </section>
+      {activeTab === 'FinBot AI' && <AiChatView />}
+    </section>
 
       <FundingSourceModal
         open={walletModalOpen}
@@ -2221,7 +2223,6 @@ export function FinanceDashboard() {
         onSubmit={handleBudgetSubmit}
       />
 
-      <Chatbot />
 
       <ConfirmDeleteModal
         open={deleteAccountModalOpen}
@@ -2263,8 +2264,17 @@ export function FinanceDashboard() {
       {overBudgetModalOpen && (
         <div className="modal-backdrop confirm-backdrop" style={{ zIndex: 1000 }}>
           <div className="confirm-modal-card" style={{ maxWidth: '400px', textAlign: 'center' }}>
-            <div className="confirm-icon" style={{ background: '#fee2e2', color: '#ef4444', margin: '0 auto 16px' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <div className="confirm-icon" style={{ 
+              background: '#fef3c7', 
+              color: '#f1c74a', 
+              width: '64px', 
+              height: '64px', 
+              borderRadius: '50%', 
+              display: 'grid', 
+              placeItems: 'center', 
+              margin: '0 auto 20px' 
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
             <h3>Over Budget!</h3>
             <p>Pengeluaran kamu telah melebihi batas budget untuk kategori:<br/><strong style={{ color: '#ef4444', display: 'block', marginTop: '8px' }}>{overBudgetNames}</strong></p>
