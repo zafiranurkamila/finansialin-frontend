@@ -697,6 +697,7 @@ export function FinanceDashboard() {
             source: values.source,
             date: values.date,
             idCategory: values.idCategory ? Number(values.idCategory) : undefined,
+            idResource: values.idResource
           }),
         });
         setNotice('Transaksi berhasil ditambahkan.');

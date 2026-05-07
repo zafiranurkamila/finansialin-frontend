@@ -78,7 +78,7 @@ export default function LoginPage() {
       <div className="form-head">
         <p className="eyebrow">Welcome back</p>
         <h2>Login ke akunmu</h2>
-        <p>Masukkan email dan password untuk lanjut ke verifikasi OTP.</p>
+        <p>Masukkan email dan password untuk lanjut.</p>
       </div>
 
       <label className="field">

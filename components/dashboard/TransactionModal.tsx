@@ -63,7 +63,6 @@ export function TransactionModal({
     }
   }, [initialValues, open, mode]);
 
-  const sourceOptions = useMemo(() => sources.map((source) => source.source), [sources]);
   const filteredCategories = useMemo(() => categories.filter(c => c.type === values.type), [categories, values.type]);
 
   if (!open) {
@@ -230,11 +229,23 @@ export function TransactionModal({
 
             <label className="field modal-field">
               <span>Source dompet</span>
-              <select className="premium-select" value={values.source} onChange={(event) => setValues((current) => ({ ...current, source: event.target.value }))}>
+              <select 
+                className="premium-select" 
+                value={values.idResource || ''} 
+                onChange={(event) => {
+                  const resId = event.target.value;
+                  const selectedResource = sources.find(s => s.idResource === Number(resId));
+                  setValues((current) => ({ 
+                    ...current, 
+                    idResource: resId ? Number(resId) : null,
+                    source: selectedResource ? selectedResource.source : ''
+                  }));
+                }}
+              >
                 <option value="">Pilih dompet</option>
-                {sourceOptions.map((source) => (
-                  <option key={source} value={source}>
-                    {source}
+                {sources.map((source) => (
+                  <option key={source.idResource} value={source.idResource}>
+                    {source.source}
                   </option>
                 ))}
               </select>
