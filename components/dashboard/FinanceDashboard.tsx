@@ -1009,7 +1009,7 @@ export function FinanceDashboard() {
   return (
     <main className="dashboard-shell">
       <aside className="sidebar">
-        <div className="brand-block">
+        <div className="brand-block" onClick={() => setActiveTab('Dashboard')} style={{ cursor: 'pointer' }}>
           <BrandLogo />
         </div>
 
@@ -1052,11 +1052,7 @@ export function FinanceDashboard() {
           )}
 
           <div className="topbar-tools" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {activeTab === 'Dashboard' && (
-              <button type="button" className="add-wallet-btn" onClick={openCreateWallet}>
-                + Wallet
-              </button>
-            )}
+
             {activeTab === 'Budgeting' && (
               <button type="button" className="add-wallet-btn" onClick={openCreateBudget}>
                 + Create Budget

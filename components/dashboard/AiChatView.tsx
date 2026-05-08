@@ -16,11 +16,124 @@ const SUGGESTED_PROMPTS = [
   "Bagaimana performa budget saya?"
 ];
 
+const MiniChart = ({ data }: { data: any }) => {
+  if (!data || !data.values || !data.values.length) return null;
+
+  const { type, labels, values, title } = data;
+  const max = Math.max(...values, 1);
+  const chartHeight = 120;
+  const chartWidth = 300;
+
+  if (type === 'pie' || type === 'donut') {
+    let total = values.reduce((a: number, b: number) => a + b, 0);
+    let currentAngle = 0;
+    const colors = ['#f1c74a', '#f9df94', '#9d8120', '#fff7d4', '#eab308'];
+
+    return (
+      <div className="mini-chart pie-chart" style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+        {title && <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#f1c74a' }}>{title}</h4>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <svg viewBox="0 0 100 100" style={{ width: '100px', height: '100px', transform: 'rotate(-90deg)' }}>
+            {values.map((val: number, i: number) => {
+              const sliceAngle = (val / total) * 100;
+              const dashArray = `${sliceAngle} ${100 - sliceAngle}`;
+              const dashOffset = -currentAngle;
+              currentAngle += sliceAngle;
+              return (
+                <circle
+                  key={i}
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke={colors[i % colors.length]}
+                  strokeWidth="15"
+                  strokeDasharray={dashArray}
+                  strokeDashoffset={dashOffset}
+                  pathLength="100"
+                />
+              );
+            })}
+            <circle cx="50" cy="50" r="30" fill="#171717" />
+          </svg>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+            {labels.map((label: string, i: number) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#ccc' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: colors[i % colors.length] }} />
+                <span style={{ flex: 1 }}>{label}</span>
+                <span style={{ fontWeight: 600 }}>{Math.round((values[i] / total) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'bar') {
+    return (
+      <div className="mini-chart bar-chart" style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+        {title && <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#f1c74a' }}>{title}</h4>}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: `${chartHeight}px` }}>
+          {values.map((val: number, i: number) => (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <div 
+                style={{ 
+                  width: '100%', 
+                  height: `${(val / max) * (chartHeight - 20)}px`, 
+                  background: 'linear-gradient(to top, #f1c74a, #f9df94)', 
+                  borderRadius: '4px 4px 0 0',
+                  minHeight: '2px'
+                }} 
+              />
+              <span style={{ fontSize: '10px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center' }}>
+                {labels[i]}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Default to Line Chart
+  const points = values.map((val: number, i: number) => {
+    const x = (i / (values.length - 1)) * (chartWidth - 40) + 20;
+    const y = chartHeight - ((val / max) * (chartHeight - 40) + 20);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="mini-chart line-chart" style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+      {title && <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#f1c74a' }}>{title}</h4>}
+      <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ width: '100%', height: 'auto' }}>
+        <polyline
+          fill="none"
+          stroke="#f1c74a"
+          strokeWidth="2"
+          points={points}
+        />
+        {values.map((val: number, i: number) => {
+          const x = (i / (values.length - 1)) * (chartWidth - 40) + 20;
+          const y = chartHeight - ((val / max) * (chartHeight - 40) + 20);
+          return (
+            <g key={i}>
+              <circle cx={x} cy={y} r="3" fill="#f1c74a" />
+              <text x={x} y={chartHeight - 5} fontSize="8" fill="#aaa" textAnchor="middle">{labels[i]}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 export function AiChatView() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
+  const [chatHistory, setChatHistory] = useState<{role: 'user'|'model', text: string}[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,20 +152,36 @@ export function AiChatView() {
     const userMessage = text.trim();
     setInput('');
     const newMessageId = Math.random().toString(36).substring(2, 9);
+    
+    // Maintain snapshots for consistent state during async call
+    const currentHistory = [...chatHistory];
+    
     setMessages(prev => [...prev, { id: newMessageId, role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
       const response = await apiRequest<{ reply: string, type?: string }>('/ai/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: userMessage, session_id: sessionId })
+        body: JSON.stringify({ 
+          message: userMessage, 
+          session_id: sessionId,
+          history: currentHistory // Send history to backend
+        })
       });
       
+      const aiReply = response.reply;
       setMessages(prev => [...prev, { 
         id: Math.random().toString(36).substring(2, 9), 
         role: 'ai', 
-        content: response.reply 
+        content: aiReply 
       }]);
+
+      // Update history for next turn
+      setChatHistory(prev => [
+        ...prev,
+        { role: 'user', text: userMessage },
+        { role: 'model', text: aiReply }
+      ]);
     } catch (err) {
       setMessages(prev => [...prev, { 
         id: Math.random().toString(36).substring(2, 9), 
@@ -117,9 +246,51 @@ export function AiChatView() {
                     )}
                   </div>
                   <div className="message-text">
-                    {m.content.split('\n').map((line, i) => (
-                      <p key={i}>{line}</p>
-                    ))}
+                    {(() => {
+                      const chartMatch = m.content.match(/\[CHART_DATA:\s*({.*?})\]/);
+                      const textContent = chartMatch ? m.content.replace(chartMatch[0], '').trim() : m.content;
+                      let chartData = null;
+                      if (chartMatch) {
+                        try {
+                          chartData = JSON.parse(chartMatch[1]);
+                        } catch (e) {
+                          console.error("Failed to parse chart data", e);
+                        }
+                      }
+
+                      const renderText = (text: string) => {
+                        return text.split('\n').map((line, i) => {
+                          // Handle Bullet Points
+                          if (line.trim().startsWith('- ')) {
+                            return <li key={i} style={{ marginLeft: '16px', marginBottom: '4px' }}>{parseInline(line.trim().substring(2))}</li>;
+                          }
+                          // Handle Paragraphs
+                          return <p key={i} style={{ marginBottom: '8px' }}>{parseInline(line)}</p>;
+                        });
+                      };
+
+                      const parseInline = (text: string) => {
+                        const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+                        return parts.map((part, i) => {
+                          if (part.startsWith('**') && part.endsWith('**')) {
+                            return <strong key={i}>{part.slice(2, -2)}</strong>;
+                          }
+                          if (part.startsWith('*') && part.endsWith('*')) {
+                            return <em key={i}>{part.slice(1, -1)}</em>;
+                          }
+                          return part;
+                        });
+                      };
+
+                      return (
+                        <>
+                          <div className="message-text-content">
+                            {renderText(textContent)}
+                          </div>
+                          {chartData && <MiniChart data={chartData} />}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
