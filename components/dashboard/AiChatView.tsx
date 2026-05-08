@@ -74,15 +74,15 @@ const MiniChart = ({ data }: { data: any }) => {
     return (
       <div className="mini-chart bar-chart" style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
         {title && <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#f1c74a' }}>{title}</h4>}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: `${chartHeight}px` }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: `${chartHeight}px`, borderLeft: '1px solid rgba(255,255,255,0.2)', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingLeft: '8px', paddingBottom: '4px' }}>
           {values.map((val: number, i: number) => (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <div 
                 style={{ 
-                  width: '100%', 
+                  width: '80%', 
                   height: `${(val / max) * (chartHeight - 20)}px`, 
                   background: 'linear-gradient(to top, #f1c74a, #f9df94)', 
-                  borderRadius: '4px 4px 0 0',
+                  borderRadius: '2px 2px 0 0',
                   minHeight: '2px'
                 }} 
               />
@@ -98,7 +98,7 @@ const MiniChart = ({ data }: { data: any }) => {
 
   // Default to Line Chart
   const points = values.map((val: number, i: number) => {
-    const x = (i / (values.length - 1)) * (chartWidth - 40) + 20;
+    const x = (i / (values.length - 1)) * (chartWidth - 60) + 40;
     const y = chartHeight - ((val / max) * (chartHeight - 40) + 20);
     return `${x},${y}`;
   }).join(' ');
@@ -107,6 +107,11 @@ const MiniChart = ({ data }: { data: any }) => {
     <div className="mini-chart line-chart" style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
       {title && <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#f1c74a' }}>{title}</h4>}
       <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ width: '100%', height: 'auto' }}>
+        {/* Y Axis */}
+        <line x1="30" y1="10" x2="30" y2={chartHeight - 20} stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+        {/* X Axis */}
+        <line x1="30" y1={chartHeight - 20} x2={chartWidth - 10} y2={chartHeight - 20} stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+        
         <polyline
           fill="none"
           stroke="#f1c74a"
@@ -114,7 +119,7 @@ const MiniChart = ({ data }: { data: any }) => {
           points={points}
         />
         {values.map((val: number, i: number) => {
-          const x = (i / (values.length - 1)) * (chartWidth - 40) + 20;
+          const x = (i / (values.length - 1)) * (chartWidth - 60) + 40;
           const y = chartHeight - ((val / max) * (chartHeight - 40) + 20);
           return (
             <g key={i}>
@@ -247,7 +252,8 @@ export function AiChatView() {
                   </div>
                   <div className="message-text">
                     {(() => {
-                      const chartMatch = m.content.match(/\[CHART_DATA:\s*({.*?})\]/);
+                      // More robust regex to find the chart block
+                      const chartMatch = m.content.match(/\[CHART_DATA:\s*({[\s\S]*?})\]/);
                       const textContent = chartMatch ? m.content.replace(chartMatch[0], '').trim() : m.content;
                       let chartData = null;
                       if (chartMatch) {
@@ -259,7 +265,9 @@ export function AiChatView() {
                       }
 
                       const renderText = (text: string) => {
+                        if (!text) return null;
                         return text.split('\n').map((line, i) => {
+                          if (!line.trim()) return <div key={i} style={{ height: '8px' }} />;
                           // Handle Bullet Points
                           if (line.trim().startsWith('- ')) {
                             return <li key={i} style={{ marginLeft: '16px', marginBottom: '4px' }}>{parseInline(line.trim().substring(2))}</li>;
@@ -320,12 +328,18 @@ export function AiChatView() {
 
       <div className="chat-input-wrapper">
         <form className="chat-input-form" onSubmit={onSubmit}>
-          <input 
-            type="text" 
+          <textarea 
             placeholder="Tanyakan sesuatu ke FinBot..." 
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                onSubmit(e as any);
+              }
+            }}
             disabled={isLoading}
+            rows={1}
           />
           <button type="submit" disabled={!input.trim() || isLoading}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -505,14 +519,18 @@ export function AiChatView() {
           box-shadow: 0 0 0 4px rgba(241, 199, 74, 0.1);
         }
 
-        .chat-input-form input {
+        .chat-input-form textarea {
           flex: 1;
           border: none;
           background: transparent;
-          padding: 12px 0;
+          padding: 14px 0;
           font-size: 1rem;
           outline: none;
           color: #171717;
+          resize: none;
+          font-family: inherit;
+          max-height: 150px;
+          line-height: 1.5;
         }
 
         .chat-input-form button {
