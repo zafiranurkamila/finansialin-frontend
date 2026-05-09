@@ -10,10 +10,10 @@ type Message = {
 };
 
 const SUGGESTED_PROMPTS = [
-  "Berapa total saldoku sekarang?",
-  "Apa pengeluaran terbesar saya bulan ini?",
-  "Beri saya tips hemat minggu ini.",
-  "Bagaimana performa budget saya?"
+  "Evaluasi pengeluaranku bulan ini dong, apakah aku terlalu boros?",
+  "Berapa sisa saldoku sekarang dan apa saja pengeluaran terbaruku?",
+  "Berikan aku tips hemat minggu ini berdasarkan pola pengeluaranku!",
+  "Bagaimana progress pencapaian target tabunganku saat ini?"
 ];
 
 const MiniChart = ({ data }: { data: any }) => {

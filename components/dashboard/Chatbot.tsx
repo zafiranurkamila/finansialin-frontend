@@ -16,9 +16,10 @@ type ChatHistoryItem = {
 };
 
 const SUGGESTED_PROMPTS = [
-  "Tolong cek dong, berapa total saldoku sekarang?",
-  "Apa pengeluaran terbesar saya bulan ini?",
-  "Beri saya tips hemat minggu ini."
+  "Evaluasi pengeluaranku bulan ini dong, apakah aku terlalu boros?",
+  "Berapa sisa saldoku sekarang dan apa saja pengeluaran terbaruku?",
+  "Berikan aku tips hemat minggu ini berdasarkan pola pengeluaranku!",
+  "Bagaimana progress pencapaian target tabunganku saat ini?"
 ];
 
 export function Chatbot() {
