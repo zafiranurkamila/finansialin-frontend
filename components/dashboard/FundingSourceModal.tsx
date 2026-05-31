@@ -75,13 +75,20 @@ export function FundingSourceModal({
           </label>
 
           <label className="field modal-field">
-            <span>Saldo awal</span>
+            <span>Saldo {mode === 'create' ? 'awal' : 'saat ini'}</span>
             <input
               value={values.initialBalance}
               onChange={(event) => setValues((current) => ({ ...current, initialBalance: event.target.value }))}
               inputMode="numeric"
               placeholder="50000000"
+              readOnly={mode === 'edit'}
+              style={mode === 'edit' ? { backgroundColor: '#f5f5f5', cursor: 'not-allowed' } : undefined}
             />
+            {mode === 'edit' && (
+              <span style={{ fontSize: '12px', color: '#666', marginTop: '4px', lineHeight: '1.4' }}>
+                Saldo hanya dapat bertambah lewat transaksi Pemasukan (Income) dan berkurang lewat Pengeluaran (Expense).
+              </span>
+            )}
           </label>
         </div>
 

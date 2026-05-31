@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { SWRConfig } from 'swr';
 import {
   apiRequest,
   type ResourceRecord,
@@ -14,6 +14,7 @@ import { FundingSourceModal, type FundingSourceFormValues } from './FundingSourc
 import { TransactionModal, type TransactionFormValues } from './TransactionModal';
 import { BudgetModal } from './BudgetModal';
 import { AiChatView } from './AiChatView';
+
 import { DashboardIcon, TransactionsIcon, BudgetingIcon, StatisticsIcon, SettingsIcon, LogoutIcon, BellIcon, UserIcon, PencilIcon, CpuIcon } from '@/components/icons';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import './dashboard.css';
@@ -128,10 +129,10 @@ export function FinanceDashboard() {
     }
   }, [error]);
 
-  const { data: sourcesResp, mutate: mutateSources } = useSWR<{ data: ResourceRecord[] }>('/resources', fetcher);
+  const { data: sourcesResp, mutate: mutateSources } = useSWR<{ data: ResourceRecord[] }>('/resources', fetcher, { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 });
   const sources = sourcesResp?.data || [];
 
-  const { data: txResp, mutate: mutateTransactions } = useSWR<{ data?: TransactionRecord[] }>('/transactions?per_page=50', fetcher);
+  const { data: txResp, mutate: mutateTransactions } = useSWR<{ data?: TransactionRecord[] }>('/transactions?per_page=50', fetcher, { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 });
   const transactions = txResp?.data || [];
 
   type UserProfile = {
@@ -139,7 +140,7 @@ export function FinanceDashboard() {
     name?: string;
     email?: string;
   };
-  const { data: profileResp, mutate: mutateProfile } = useSWR<{ data?: UserProfile } | UserProfile | null>('/auth/profile', (url: string) => apiRequest<{ data?: UserProfile } | UserProfile>(url).catch(() => null));
+  const { data: profileResp, mutate: mutateProfile } = useSWR<{ data?: UserProfile } | UserProfile | null>('/auth/profile', (url: string) => apiRequest<{ data?: UserProfile } | UserProfile>(url).catch(() => null), { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 });
   const userProfile = profileResp ? ('data' in profileResp && profileResp.data ? profileResp.data : (profileResp as UserProfile)) : null;
   const setUserProfile = (profile: UserProfile | null) => mutateProfile(profile as any, { revalidate: false });
 
@@ -152,7 +153,7 @@ export function FinanceDashboard() {
     createdAt: string;
   };
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
-  const { data: unreadResp, mutate: mutateUnread } = useSWR<{ count: number }>('/notifications/unread/count', (url: string) => apiRequest<{ count: number }>(url).catch(() => ({ count: 0 })));
+  const { data: unreadResp, mutate: mutateUnread } = useSWR<{ count: number }>('/notifications/unread/count', (url: string) => apiRequest<{ count: number }>(url).catch(() => ({ count: 0 })), { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 });
   const unreadCount = unreadResp?.count || 0;
   const setUnreadCount = (count: number) => mutateUnread({ count }, { revalidate: false });
 
@@ -161,8 +162,9 @@ export function FinanceDashboard() {
   const [statsSubTab, setStatsSubTab] = useState<'Analytics' | 'Laporan'>('Analytics');
   const [reportMonth, setReportMonth] = useState(new Date().getMonth());
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState('Dashboard');
   
-  const { data: insightResp, mutate: mutateAiInsight, isValidating: loadingAi } = useSWR<{ summary: string }>('/ai/dashboard-summary', (url: string) => apiRequest<{ summary: string }>(url).catch(() => ({ summary: 'Belum ada insight AI saat ini. Terus catat transaksimu ya!' })));
+  const { data: insightResp, mutate: mutateAiInsight, isValidating: loadingAi } = useSWR<{ summary: string }>(activeTab === 'Dashboard' ? '/ai/dashboard-summary' : null, (url: string) => apiRequest<{ summary: string }>(url).catch(() => ({ summary: 'Belum ada insight AI saat ini. Terus catat transaksimu ya!' })), { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 });
   const aiInsight = insightResp?.summary || 'Belum ada insight AI saat ini. Terus catat transaksimu ya!';
 
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -176,7 +178,7 @@ export function FinanceDashboard() {
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState('');
 
-  const { data: prefData, mutate: mutatePreferences } = useSWR<any>('/users/preferences', (url: string) => apiRequest<any>(url).catch(() => null));
+  const { data: prefData, mutate: mutatePreferences } = useSWR<any>('/users/preferences', (url: string) => apiRequest<any>(url).catch(() => null), { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 });
   const preferences = prefData || { hideBalance: false, dailyReminder: true, budgetLimitAlert: true, weeklySummary: true };
   const setPreferences = (prefs: any) => mutatePreferences(prefs, { revalidate: false });
 
@@ -194,7 +196,11 @@ export function FinanceDashboard() {
     name: string;
     type: string;
   };
-  const { data: categoriesData } = useSWR<CategoryRecord[]>('/categories', (url: string) => apiRequest<CategoryRecord[]>(url).catch(() => []));
+  const { data: categoriesData } = useSWR<CategoryRecord[]>(
+    activeTab === 'Transactions' || activeTab === 'Budgeting' ? '/categories' : null,
+    (url: string) => apiRequest<CategoryRecord[]>(url).catch(() => []),
+    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 }
+  );
   const categories = categoriesData || [];
 
   type GoalRecord = {
@@ -206,10 +212,12 @@ export function FinanceDashboard() {
     remaining: number;
     overBudget: boolean;
   };
-  const { data: goalsResp, mutate: mutateGoals } = useSWR<{ data: GoalRecord[] }>('/budgets/goals', (url: string) => apiRequest<{ data: GoalRecord[] }>(url).catch(() => ({ data: [] })));
+  const { data: goalsResp, mutate: mutateGoals } = useSWR<{ data: GoalRecord[] }>(
+    activeTab === 'Budgeting' || activeTab === 'Dashboard' ? '/budgets/goals' : null,
+    (url: string) => apiRequest<{ data: GoalRecord[] }>(url).catch(() => ({ data: [] })),
+    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 }
+  );
   const goals = goalsResp?.data || [];
-
-  const [activeTab, setActiveTab] = useState('Dashboard');
 
   type BudgetRecord = {
     idBudget: number;
@@ -222,7 +230,11 @@ export function FinanceDashboard() {
     periodEnd: string;
     category?: { name: string };
   };
-  const { data: budgetsData, mutate: mutateBudgets } = useSWR<BudgetRecord[]>('/budgets', (url: string) => apiRequest<BudgetRecord[]>(url).catch(() => []));
+  const { data: budgetsData, mutate: mutateBudgets } = useSWR<BudgetRecord[]>(
+    activeTab === 'Budgeting' || activeTab === 'Dashboard' ? '/budgets' : null,
+    (url: string) => apiRequest<BudgetRecord[]>(url).catch(() => []),
+    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 }
+  );
   const budgets = budgetsData || [];
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [budgetMode, setBudgetMode] = useState<'create' | 'edit'>('create');
@@ -232,6 +244,8 @@ export function FinanceDashboard() {
   const [budgetSearch, setBudgetSearch] = useState('');
   const [budgetFilterPeriod, setBudgetFilterPeriod] = useState('all');
   const [budgetFilterStatus, setBudgetFilterStatus] = useState<'all' | 'safe' | 'over'>('all');
+
+
   
   const [hasAlertedOverBudget, setHasAlertedOverBudget] = useState(false);
   const [overBudgetModalOpen, setOverBudgetModalOpen] = useState(false);
@@ -256,6 +270,37 @@ export function FinanceDashboard() {
       return () => clearTimeout(timer);
     }
   }, [overBudgetModalOpen]);
+
+  const [hasAlertedExpiredBudget, setHasAlertedExpiredBudget] = useState(false);
+  const [expiredBudgetModalOpen, setExpiredBudgetModalOpen] = useState(false);
+  const [expiredBudgetNames, setExpiredBudgetNames] = useState<string>('');
+
+  useEffect(() => {
+    if (activeTab === 'Budgeting' && budgets.length > 0 && !hasAlertedExpiredBudget) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiredList = budgets.filter(b => {
+        if (!b.periodEnd) return false;
+        const end = new Date(b.periodEnd);
+        end.setHours(0, 0, 0, 0);
+        return today > end;
+      });
+      if (expiredList.length > 0) {
+        setExpiredBudgetNames(expiredList.map(b => b.category?.name || 'General').join(', '));
+        setExpiredBudgetModalOpen(true);
+      }
+      setHasAlertedExpiredBudget(true);
+    } else if (activeTab !== 'Budgeting') {
+      setHasAlertedExpiredBudget(false);
+    }
+  }, [budgets, activeTab, hasAlertedExpiredBudget]);
+
+  useEffect(() => {
+    if (expiredBudgetModalOpen) {
+      const timer = setTimeout(() => setExpiredBudgetModalOpen(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [expiredBudgetModalOpen]);
 
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletMode, setWalletMode] = useState<'create' | 'edit'>('create');
@@ -299,6 +344,24 @@ export function FinanceDashboard() {
   };
 
   const loading = !sourcesResp || !txResp;
+
+  const [loadingMessage, setLoadingMessage] = useState('Menghubungkan ke server aman...');
+  useEffect(() => {
+    if (!loading) return;
+    const messages = [
+      'Menghubungkan ke server aman...',
+      'Mengambil data dompet...',
+      'Memuat riwayat transaksi...',
+      'Sinkronisasi anggaran belanja...',
+      'Menyiapkan dashboard Finansialin...'
+    ];
+    let idx = 0;
+    const interval = setInterval(() => {
+      idx = (idx + 1) % messages.length;
+      setLoadingMessage(messages[idx]);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -405,6 +468,30 @@ export function FinanceDashboard() {
       return matchesSearch && matchesPeriod && matchesStatus;
     });
   }, [budgets, budgetSearch, globalSearch, budgetFilterPeriod, budgetFilterStatus]);
+
+  const { activeBudgets, expiredBudgets } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const active: BudgetRecord[] = [];
+    const expired: BudgetRecord[] = [];
+
+    filteredBudgets.forEach(b => {
+      if (!b.periodEnd) {
+        active.push(b);
+        return;
+      }
+      const end = new Date(b.periodEnd);
+      end.setHours(0, 0, 0, 0);
+      if (today > end) {
+        expired.push(b);
+      } else {
+        active.push(b);
+      }
+    });
+
+    return { activeBudgets: active, expiredBudgets: expired };
+  }, [filteredBudgets]);
 
   const topTransactions = useMemo(() => {
     return transactions
@@ -772,6 +859,8 @@ export function FinanceDashboard() {
     });
   };
 
+
+
   const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1006,8 +1095,16 @@ export function FinanceDashboard() {
     document.body.removeChild(link);
   };
 
+
+
   return (
-    <main className="dashboard-shell">
+    <SWRConfig value={{
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      revalidateIfStale: false,
+      dedupingInterval: 600000
+    }}>
+      <main className="dashboard-shell">
       <aside className="sidebar">
         <div className="brand-block" onClick={() => setActiveTab('Dashboard')} style={{ cursor: 'pointer' }}>
           <BrandLogo />
@@ -1183,14 +1280,7 @@ export function FinanceDashboard() {
                   <p className="account-amount-value">{maskBalance(source.balance || 0)}</p>
                   <p className="account-amount-label">Total amount</p>
 
-                  <div className="card-footer">
-                    <button type="button" className="remove-link" onClick={() => handleRemoveWallet(source)}>
-                      Remove
-                    </button>
-                    <button type="button" className="edit-link" onClick={() => openEditWallet(source)}>
-                      <PencilIcon />
-                    </button>
-                  </div>
+
                 </article>
               ))}
             </section>
@@ -1274,6 +1364,8 @@ export function FinanceDashboard() {
                 </div>
               </div>
             </article>
+
+
           </div>
         </section>
 
@@ -1586,56 +1678,121 @@ export function FinanceDashboard() {
                </div>
             </div>
 
-            <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-              {filteredBudgets.map((budget) => {
-                const percent = Math.min(100, budget.percent || 0);
-                const isOver = percent >= 100;
-                return (
-                  <article key={budget.idBudget} className="panel budget-card" style={{ padding: '24px', position: 'relative' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                      <h3 style={{ fontWeight: 600 }}>{budget.category?.name || 'General'}</h3>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#888', textTransform: 'capitalize' }}>{budget.period}</span>
-                        <div className="action-buttons" style={{ marginLeft: '8px' }}>
-                          <button type="button" className="action-btn" onClick={() => openEditBudget(budget)} title="Edit Budget">
-                            <PencilIcon />
-                          </button>
-                          <button type="button" className="action-btn" onClick={() => handleBudgetDelete(budget.idBudget)} title="Delete Budget">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                          </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
+            {activeBudgets.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 16px 0', color: '#171717', letterSpacing: '-0.3px' }}>Budget Aktif ({activeBudgets.length})</h3>
+                <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+                  {activeBudgets.map((budget) => {
+                    const percent = Math.min(100, budget.percent || 0);
+                    const isOver = percent >= 100;
+                    return (
+                      <article key={budget.idBudget} className="panel budget-card" style={{ padding: '24px', position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                          <h3 style={{ fontWeight: 600 }}>{budget.category?.name || 'General'}</h3>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#888', textTransform: 'capitalize' }}>{budget.period}</span>
+                            <div className="action-buttons" style={{ marginLeft: '8px' }}>
+                              <button type="button" className="action-btn" onClick={() => openEditBudget(budget)} title="Edit Budget">
+                                <PencilIcon />
+                              </button>
+                              <button type="button" className="action-btn" onClick={() => handleBudgetDelete(budget.idBudget)} title="Delete Budget">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
-                        <span>{formatCurrency(budget.spent || 0)}</span>
-                        <span style={{ fontWeight: 600 }}>{formatCurrency(budget.amount)}</span>
-                      </div>
-                      <div className="progress-bar-bg" style={{ height: '8px', background: '#f0f0f0', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div 
-                          className="progress-bar-fill" 
-                          style={{ 
-                            width: `${percent}%`, 
-                            height: '100%', 
-                            background: isOver ? '#ef4444' : '#f1c74a',
-                            transition: 'width 0.5s ease'
-                          }} 
-                        />
-                      </div>
-                    </div>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
+                            <span>{formatCurrency(budget.spent || 0)}</span>
+                            <span style={{ fontWeight: 600 }}>{formatCurrency(budget.amount)}</span>
+                          </div>
+                          <div className="progress-bar-bg" style={{ height: '8px', background: '#f0f0f0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div 
+                              className="progress-bar-fill" 
+                              style={{ 
+                                width: `${percent}%`, 
+                                height: '100%', 
+                                background: isOver ? '#ef4444' : '#f1c74a',
+                                transition: 'width 0.5s ease'
+                              }} 
+                            />
+                          </div>
+                        </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.85rem', color: isOver ? '#ef4444' : '#666' }}>
-                        {isOver ? 'Over budget!' : `${100 - percent}% remaining`}
-                      </span>
-                      <div className="budget-dates" style={{ fontSize: '0.75rem', color: '#999' }}>
-                         {formatDate(budget.periodStart)} - {formatDate(budget.periodEnd)}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: isOver ? '#ef4444' : '#666' }}>
+                            {isOver ? 'Over budget!' : `${100 - percent}% remaining`}
+                          </span>
+                          <div className="budget-dates" style={{ fontSize: '0.75rem', color: '#999' }}>
+                             {formatDate(budget.periodStart)} - {formatDate(budget.periodEnd)}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {expiredBudgets.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '16px 0 16px 0', color: '#888', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Budget Selesai / Kedaluwarsa ({expiredBudgets.length})
+                </h3>
+                <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                  {expiredBudgets.map((budget) => {
+                    const percent = Math.min(100, budget.percent || 0);
+                    return (
+                      <article key={budget.idBudget} className="panel budget-card expired" style={{ padding: '24px', position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                          <h3 style={{ fontWeight: 600 }}>{budget.category?.name || 'General'}</h3>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span className="expired-badge">Expired</span>
+                            <div className="action-buttons" style={{ marginLeft: '8px' }}>
+                              <button type="button" className="action-btn lock-btn" title="Budget ini telah kedaluwarsa dan tidak dapat diedit lagi" style={{ cursor: 'not-allowed' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                              </button>
+                              <button type="button" className="action-btn" onClick={() => handleBudgetDelete(budget.idBudget)} title="Hapus Budget">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
+                            <span>{formatCurrency(budget.spent || 0)}</span>
+                            <span style={{ fontWeight: 600 }}>{formatCurrency(budget.amount)}</span>
+                          </div>
+                          <div className="progress-bar-bg" style={{ height: '8px', background: '#f0f0f0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div 
+                              className="progress-bar-fill" 
+                              style={{ 
+                                width: `${percent}%`, 
+                                height: '100%', 
+                                background: '#b5b5b5',
+                                transition: 'width 0.5s ease'
+                              }} 
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#888' }}>
+                            Selesai ({percent}% terpakai)
+                          </span>
+                          <div className="budget-dates" style={{ fontSize: '0.75rem', color: '#999' }}>
+                             {formatDate(budget.periodStart)} - {formatDate(budget.periodEnd)}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {filteredBudgets.length === 0 && (
               <div style={{ 
@@ -1645,7 +1802,9 @@ export function FinanceDashboard() {
                 background: 'white', 
                 borderRadius: '32px', 
                 boxShadow: 'var(--premium-card-shadow)',
-                border: '1px solid var(--premium-border)'
+                border: '1px solid var(--premium-border)',
+                width: '100%',
+                boxSizing: 'border-box'
               }}>
                  <div style={{ 
                    width: '80px', 
@@ -2186,7 +2345,7 @@ export function FinanceDashboard() {
            </article>
         </section>
       )}
-      {activeTab === 'FinBot AI' && <AiChatView />}
+      {activeTab === 'FinBot AI' && <AiChatView userId={userProfile?.idUser ?? null} />}
     </section>
 
       <FundingSourceModal
@@ -2226,6 +2385,8 @@ export function FinanceDashboard() {
         onClose={() => setBudgetModalOpen(false)}
         onSubmit={handleBudgetSubmit}
       />
+
+
 
 
       <ConfirmDeleteModal
@@ -2301,6 +2462,232 @@ export function FinanceDashboard() {
           </div>
         </div>
       )}
-    </main >
+
+      {expiredBudgetModalOpen && (
+        <div className="modal-backdrop confirm-backdrop" style={{ zIndex: 1001 }}>
+          <div className="confirm-modal-card" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <div className="confirm-icon" style={{ 
+              background: '#fee2e2', 
+              color: '#ef4444', 
+              width: '64px', 
+              height: '64px', 
+              borderRadius: '50%', 
+              display: 'grid', 
+              placeItems: 'center', 
+              margin: '0 auto 20px' 
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <h3>Budget Telah Berakhir!</h3>
+            <p>Masa berlaku budget Anda telah selesai untuk kategori:<br/><strong style={{ color: '#ef4444', display: 'block', marginTop: '8px' }}>{expiredBudgetNames}</strong></p>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', width: '100%' }}>
+              <button className="solid-button" onClick={() => setExpiredBudgetModalOpen(false)} style={{ padding: '12px 32px' }}>Saya Mengerti</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {!loading && sources.length === 0 && (
+        <div className="onboarding-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(255, 255, 255, 0.4)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '24px',
+          zIndex: 9999
+        }}>
+          <div className="onboarding-card" style={{
+            background: '#ffffff',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 0, 0, 0.08)',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.08)',
+            padding: '40px 32px',
+            maxWidth: '440px',
+            width: '100%',
+            textAlign: 'center',
+            color: '#1a1a1a'
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #f1c74a 0%, #d4a727 100%)',
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px auto',
+              boxShadow: '0 8px 20px rgba(241, 199, 74, 0.2)'
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="20" height="12" x="2" y="6" rx="2"/>
+                <circle cx="12" cy="12" r="2"/>
+                <path d="M6 12h.01M18 12h.01"/>
+              </svg>
+            </div>
+
+            <h1 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '12px', letterSpacing: '-0.5px', color: '#111' }}>
+              Selamat Datang di Finansialin! 👋
+            </h1>
+            <p style={{ color: '#555', fontSize: '14px', marginBottom: '32px', lineHeight: '1.6', fontWeight: '400' }}>
+              Sebelum memulai pencatatan keuangan Anda di dashboard, silakan tambahkan dompet (sumber dana) pertama Anda terlebih dahulu.
+            </p>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const name = formData.get('walletName') as string;
+              const balance = formData.get('initialBalance') as string;
+              
+              if (!name) {
+                setError('Harap pilih jenis dompet.');
+                return;
+              }
+
+              try {
+                setWalletSaving(true);
+                await apiRequest('/resources', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    name: name.trim(),
+                    initialBalance: Number(balance || 0)
+                  })
+                });
+                setNotice('Dompet pertama berhasil dibuat!');
+                await loadDashboard();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Gagal membuat dompet pertama.');
+              } finally {
+                setWalletSaving(false);
+              }
+            }}>
+              <div style={{ textAlign: 'left', marginBottom: '20px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '8px' }}>
+                  Jenis Dompet
+                </label>
+                <select
+                  name="walletName"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '1px solid #dcdcdc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    background: '#f9f9f9',
+                    color: '#000',
+                    cursor: 'pointer',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="">Pilih jenis dompet...</option>
+                  <option value="MBanking">MBanking</option>
+                  <option value="Emoney">Emoney</option>
+                  <option value="Cash">Cash</option>
+                </select>
+              </div>
+
+              <div style={{ textAlign: 'left', marginBottom: '32px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#444', display: 'block', marginBottom: '8px' }}>
+                  Saldo Awal
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '16px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#888'
+                  }}>Rp</span>
+                  <input
+                    name="initialBalance"
+                    type="number"
+                    required
+                    placeholder="0"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px 12px 42px',
+                      borderRadius: '12px',
+                      border: '1px solid #dcdcdc',
+                      fontSize: '14px',
+                      outline: 'none',
+                      background: '#f9f9f9',
+                      color: '#000',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.05)',
+                  border: '1px solid rgba(239, 68, 68, 0.15)',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  marginBottom: '20px',
+                  color: '#dc2626',
+                  fontSize: '13px',
+                  textAlign: 'left'
+                }}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={walletSaving}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: '#f1c74a',
+                  color: '#000',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 4px 12px rgba(241, 199, 74, 0.15)'
+                }}
+              >
+                {walletSaving ? 'Menyimpan...' : 'Simpan & Masuk Dashboard'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="full-page-loading-overlay">
+          <div className="loading-container">
+            <div className="loading-logo-wrapper">
+              <div className="loading-logo-spin" />
+              <div className="loading-logo-inner">
+                <img src="/logo.png" alt="Finansialin Logo" style={{ height: '38px', width: 'auto', mixBlendMode: 'multiply' }} />
+              </div>
+            </div>
+            <h3 className="loading-title">Memuat Data Finansial</h3>
+            <p className="loading-subtitle">
+              <span>{loadingMessage}</span>
+              <span className="loading-pulse-dots">
+                <span className="loading-pulse-dot" />
+                <span className="loading-pulse-dot" />
+                <span className="loading-pulse-dot" />
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
+      </main >
+    </SWRConfig>
   );
 }

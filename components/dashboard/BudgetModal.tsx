@@ -58,8 +58,8 @@ export function BudgetModal({ open, mode = 'create', initialValues, categories, 
     idCategory: '',
     amount: '',
     period: 'monthly',
-    periodStart: getInitialDates('monthly').start,
-    periodEnd: getInitialDates('monthly').end,
+    periodStart: getInitialDates('monthly')?.start || '',
+    periodEnd: getInitialDates('monthly')?.end || '',
   });
 
   useEffect(() => {
@@ -72,8 +72,8 @@ export function BudgetModal({ open, mode = 'create', initialValues, categories, 
           idCategory: '',
           amount: '',
           period: 'monthly',
-          periodStart: dates.start,
-          periodEnd: dates.end,
+          periodStart: dates?.start || '',
+          periodEnd: dates?.end || '',
         });
       }
     }

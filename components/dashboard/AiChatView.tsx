@@ -133,7 +133,7 @@ const MiniChart = ({ data }: { data: any }) => {
   );
 };
 
-export function AiChatView() {
+export function AiChatView({ userId }: { userId?: number | null }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -141,15 +141,81 @@ export function AiChatView() {
   const [chatHistory, setChatHistory] = useState<{role: 'user'|'model', text: string}[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Derive user-scoped localStorage keys (reset when userId changes)
+  const storagePrefix = userId != null ? `u${userId}_` : 'guest_';
+  const KEY_MESSAGES = `finansialin_chat_messages_${storagePrefix}`;
+  const KEY_HISTORY  = `finansialin_chat_history_${storagePrefix}`;
+  const KEY_SESSION  = `finansialin_chat_session_id_${storagePrefix}`;
+
+  // When userId becomes known, load that user's chat data
   useEffect(() => {
-    setSessionId(`session_user_${Math.random().toString(36).substring(2, 11)}`);
-  }, []);
+    // Reset state first (in case we switched user)
+    setMessages([]);
+    setChatHistory([]);
+    setSessionId('');
+
+    const storedSession = localStorage.getItem(KEY_SESSION);
+    if (storedSession) {
+      setSessionId(storedSession);
+    } else {
+      const newSession = `session_${storagePrefix}${Math.random().toString(36).substring(2, 11)}`;
+      setSessionId(newSession);
+      localStorage.setItem(KEY_SESSION, newSession);
+    }
+
+    const storedMessages = localStorage.getItem(KEY_MESSAGES);
+    if (storedMessages) {
+      try {
+        setMessages(JSON.parse(storedMessages));
+      } catch (e) {
+        console.error("Failed to parse stored messages", e);
+      }
+    }
+
+    const storedHistory = localStorage.getItem(KEY_HISTORY);
+    if (storedHistory) {
+      try {
+        setChatHistory(JSON.parse(storedHistory));
+      } catch (e) {
+        console.error("Failed to parse stored chat history", e);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  // Save messages to localStorage when updated
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(KEY_MESSAGES, JSON.stringify(messages));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
+  // Save chat history to localStorage when updated
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      localStorage.setItem(KEY_HISTORY, JSON.stringify(chatHistory));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatHistory]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  const handleClearChat = () => {
+    if (confirm("Apakah Anda yakin ingin menghapus semua riwayat chat?")) {
+      setMessages([]);
+      setChatHistory([]);
+      const newSession = `session_${storagePrefix}${Math.random().toString(36).substring(2, 11)}`;
+      setSessionId(newSession);
+      localStorage.removeItem(KEY_MESSAGES);
+      localStorage.removeItem(KEY_HISTORY);
+      localStorage.setItem(KEY_SESSION, newSession);
+    }
+  };
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -205,6 +271,30 @@ export function AiChatView() {
 
   return (
     <div className="ai-chat-view">
+      <div className="chat-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span className="bot-avatar-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '20px', height: '20px' }}>
+              <rect x="5" y="8" width="14" height="10" rx="2" />
+              <circle cx="9" cy="13" r="1" fill="currentColor" />
+              <circle cx="15" cy="13" r="1" fill="currentColor" />
+              <path d="M10 16s1 1 2 1 2-1 2-1" />
+            </svg>
+          </span>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#171717' }}>FinBot AI</h3>
+            <span style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginTop: '2px' }}>Asisten Keuangan Pribadi</span>
+          </div>
+        </div>
+        {messages.length > 0 && (
+          <button className="clear-chat-btn" onClick={handleClearChat} title="Hapus Riwayat Chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '18px', height: '18px', marginRight: '4px' }}>
+              <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
+            </svg>
+            Hapus Riwayat
+          </button>
+        )}
+      </div>
       <div className="chat-content" ref={scrollRef}>
         {messages.length === 0 ? (
           <div className="chat-welcome">
@@ -359,6 +449,46 @@ export function AiChatView() {
           box-shadow: 0 4px 24px rgba(0,0,0,0.03);
           border: 1px solid #f0f0f0;
           position: relative;
+        }
+
+        .chat-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px 24px;
+          border-bottom: 1px solid #f0f0f0;
+          background: #fff;
+          z-index: 10;
+        }
+
+        .bot-avatar-icon {
+          width: 36px;
+          height: 36px;
+          background: #f1c74a;
+          color: #171717;
+          border-radius: 10px;
+          display: grid;
+          place-items: center;
+        }
+
+        .clear-chat-btn {
+          background: transparent;
+          border: 1px solid #e0e0e0;
+          padding: 8px 12px;
+          border-radius: 12px;
+          font-size: 0.85rem;
+          font-weight: 500;
+          color: #666;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          transition: all 0.2s;
+        }
+
+        .clear-chat-btn:hover {
+          background: #fff5f5;
+          border-color: #feb2b2;
+          color: #e53e3e;
         }
 
         .chat-content {
