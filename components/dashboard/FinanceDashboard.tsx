@@ -171,8 +171,8 @@ export function FinanceDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [txFilterMonth, setTxFilterMonth] = useState(new Date().getMonth());
-  const [txFilterYear, setTxFilterYear] = useState(new Date().getFullYear());
+  const [txFilterMonth, setTxFilterMonth] = useState<number | 'all'>(new Date().getMonth());
+  const [txFilterYear, setTxFilterYear] = useState<number | 'all'>(new Date().getFullYear());
   const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences' | 'Account'>('Profile');
   const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
@@ -446,6 +446,10 @@ export function FinanceDashboard() {
       
       // If searching (min 2 chars), ignore date filter
       if (globalSearch.length >= 2) return matchesSearch;
+
+      if (txFilterMonth === 'all' || txFilterYear === 'all') {
+        return matchesSearch;
+      }
 
       const d = new Date(t.date || '');
       const matchesDate = d.getMonth() === txFilterMonth && d.getFullYear() === txFilterYear;
@@ -1509,13 +1513,20 @@ export function FinanceDashboard() {
               <div className="toolbar-right">
                 <select 
                   className="date-select"
-                  value={`${txFilterMonth}-${txFilterYear}`}
+                  value={txFilterMonth === 'all' || txFilterYear === 'all' ? 'all' : `${txFilterMonth}-${txFilterYear}`}
                   onChange={(e) => {
+                    if (e.target.value === 'all') {
+                      setTxFilterMonth('all');
+                      setTxFilterYear('all');
+                      return;
+                    }
+
                     const [m, y] = e.target.value.split('-').map(Number);
                     setTxFilterMonth(m);
                     setTxFilterYear(y);
                   }}
                 >
+                  <option value="all">All Transactions</option>
                   {(() => {
                     const options = [];
                     const now = new Date();
