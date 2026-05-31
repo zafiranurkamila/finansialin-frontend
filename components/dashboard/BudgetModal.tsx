@@ -27,30 +27,36 @@ interface BudgetModalProps {
 }
 
 export function BudgetModal({ open, mode = 'create', initialValues, categories, loading, error, onClose, onSubmit }: BudgetModalProps) {
+  const formatDate = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const date = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}`;
+  };
+
   const getInitialDates = (period: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom') => {
     const now = new Date();
-    let start = new Date(now);
-    let end = new Date(now);
+    let start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     if (period === 'monthly') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate() - 1);
     } else if (period === 'weekly') {
-      const day = now.getDay() || 7;
-      if (day !== 1) start.setHours(-24 * (day - 1));
-      end = new Date(start);
-      end.setDate(start.getDate() + 6);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 6);
     } else if (period === 'yearly') {
-      start = new Date(now.getFullYear(), 0, 1);
-      end = new Date(now.getFullYear(), 11, 31);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate() - 1);
+    } else if (period === 'daily') {
+      // already initialized to today
     } else if (period === 'custom') {
-      // Keep current values or default to now
       return null;
     }
 
     return {
-      start: start.toISOString().slice(0, 10),
-      end: end.toISOString().slice(0, 10)
+      start: formatDate(start),
+      end: formatDate(end)
     };
   };
 

@@ -28,12 +28,19 @@ const navigation = [
   { name: 'Settings', icon: <SettingsIcon /> },
 ];
 
+const getLocalDateString = (d: Date = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const date = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${date}`;
+};
+
 const initialTransactionValues = (): TransactionFormValues => ({
   type: 'income',
   amount: '',
   description: '',
   source: '',
-  date: new Date().toISOString().slice(0, 10),
+  date: getLocalDateString(),
 });
 
 function formatCurrency(value: number | string) {
@@ -171,8 +178,8 @@ export function FinanceDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [txFilterMonth, setTxFilterMonth] = useState<number | 'all'>(new Date().getMonth());
-  const [txFilterYear, setTxFilterYear] = useState<number | 'all'>(new Date().getFullYear());
+  const [txFilterMonth, setTxFilterMonth] = useState<number | 'all'>('all');
+  const [txFilterYear, setTxFilterYear] = useState<number | 'all'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'Profile' | 'Preferences' | 'Account'>('Profile');
   const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
@@ -661,7 +668,7 @@ export function FinanceDashboard() {
       amount: '',
       description: source ? `Top up ${source.source}` : 'Top up dompet',
       source: source?.source ?? '',
-      date: new Date().toISOString().slice(0, 10),
+      date: getLocalDateString(),
     });
     setTransactionMode('create');
     setEditingTransactionId(null);
@@ -675,7 +682,7 @@ export function FinanceDashboard() {
       amount: String(tx.amount),
       description: tx.description || '',
       source: tx.source || '',
-      date: tx.date || new Date().toISOString().slice(0, 10),
+      date: tx.date || getLocalDateString(),
       idCategory: tx.idCategory,
       idResource: tx.idResource
     });
@@ -892,7 +899,7 @@ export function FinanceDashboard() {
           amount: String(ocr.total_amount || ''),
           description: ocr.merchant_name || 'Transaksi dari Struk',
           source: '',
-          date: ocr.date || new Date().toISOString().slice(0, 10),
+          date: ocr.date || getLocalDateString(),
           idCategory: undefined
         });
         setTransactionModalOpen(true);
