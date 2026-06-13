@@ -237,12 +237,19 @@ export function FinanceDashboard() {
     periodEnd: string;
     category?: { name: string };
   };
-  const { data: budgetsData, mutate: mutateBudgets } = useSWR<BudgetRecord[]>(
+  type PaginatedBudgetResponse = {
+    data?: BudgetRecord[];
+  };
+  const { data: budgetsResp, mutate: mutateBudgets } = useSWR<BudgetRecord[] | PaginatedBudgetResponse>(
     activeTab === 'Budgeting' || activeTab === 'Dashboard' ? '/budgets' : null,
-    (url: string) => apiRequest<BudgetRecord[]>(url).catch(() => []),
+    (url: string) => apiRequest<BudgetRecord[] | PaginatedBudgetResponse>(url).catch(() => []),
     { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false, dedupingInterval: 600000 }
   );
-  const budgets = budgetsData || [];
+  const budgets = Array.isArray(budgetsResp)
+    ? budgetsResp
+    : Array.isArray(budgetsResp?.data)
+      ? budgetsResp.data
+      : [];
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [budgetMode, setBudgetMode] = useState<'create' | 'edit'>('create');
   const [selectedBudget, setSelectedBudget] = useState<any>(null);
