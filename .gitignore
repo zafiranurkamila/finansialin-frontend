@@ -1,5 +1,32 @@
-node_modules
-.next
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+dist/
+build/
+
+# Environment variables
 .env
-dist
-build
+.env.*
+!.env.example
+
+# TypeScript and tooling caches
+*.tsbuildinfo
+.eslintcache
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Local temporary assets
+image.png
